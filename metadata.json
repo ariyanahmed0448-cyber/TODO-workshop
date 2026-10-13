@@ -1,0 +1,6 @@
+{
+  "name": "Mutqin - Saudi Service Marketplace",
+  "description": "Bilingual Saudi local service marketplace for home maintenance and cleaning with integrated Mada, Apple Pay, STC Pay gateways, science-backed material safety, and Gemini AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account and profile details for Saudi customers and technicians",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "fullName": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 20 },
+        "role": { "type": "string", "enum": ["customer", "technician", "admin"] },
+        "city": { "type": "string", "maxLength": 50 },
+        "licenseNumber": { "type": "string", "maxLength": 50 },
+        "isVerified": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "email", "fullName", "role"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Service appointment booked by customer",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "technicianId": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "serviceTitleEn": { "type": "string" },
+        "serviceTitleAr": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "in_progress", "completed", "cancelled"] },
+        "date": { "type": "string" },
+        "timeSlot": { "type": "string" },
+        "addressCity": { "type": "string" },
+        "addressDistrict": { "type": "string" },
+        "totalSAR": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["mada", "apple_pay", "stc_pay", "credit_card", "cash"] },
+        "paymentStatus": { "type": "string", "enum": ["paid", "pending", "refunded"] },
+        "zatcaInvoiceNo": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "customerId", "serviceId", "status", "totalSAR", "paymentMethod"]
+    },
+    "Quote": {
+      "title": "Quote",
+      "description": "Custom job request submitted for technician bids",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "title": { "type": "string", "maxLength": 150 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "category": { "type": "string" },
+        "city": { "type": "string" },
+        "budgetRangeSAR": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "awarded", "completed"] },
+        "awardedBidId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "customerId", "title", "description", "category", "status"]
+    },
+    "Bid": {
+      "title": "Bid",
+      "description": "Contractor price bid for a quote request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "quoteId": { "type": "string" },
+        "technicianId": { "type": "string" },
+        "technicianName": { "type": "string" },
+        "priceSAR": { "type": "number" },
+        "estimatedDays": { "type": "number" },
+        "proposal": { "type": "string", "maxLength": 800 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "quoteId", "technicianId", "priceSAR", "proposal"]
+    },
+    "PaymentTransaction": {
+      "title": "PaymentTransaction",
+      "description": "Saudi payment transaction record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "bookingId": { "type": "string" },
+        "customerId": { "type": "string" },
+        "amountSAR": { "type": "number" },
+        "vatAmountSAR": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "status": { "type": "string", "enum": ["success", "failed", "pending"] },
+        "gatewayRef": { "type": "string" },
+        "zatcaQrData": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "customerId", "amountSAR", "paymentMethod", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles for registered customers and contractors"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Marketplace bookings for services"
+    },
+    "/quotes/{quoteId}": {
+      "schema": "Quote",
+      "description": "Customer project quotes for contractor bidding"
+    },
+    "/quotes/{quoteId}/bids/{bidId}": {
+      "schema": "Bid",
+      "description": "Technician bids on customer quotes"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "PaymentTransaction",
+      "description": "Ledger of processed Saudi payments and ZATCA tax records"
+    }
+  }
+}

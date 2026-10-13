@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId);
+      allow list: if isSignedIn() && resource.data.id == request.auth.uid;
+      allow create: if isSignedIn() && request.auth.uid == userId
+        && incoming().id == userId
+        && incoming().fullName is string && incoming().fullName.size() <= 100
+        && incoming().email is string && incoming().email.size() <= 100
+        && incoming().role in ['customer', 'technician'];
+      allow update: if isSignedIn() && request.auth.uid == userId
+        && incoming().id == userId
+        && incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'phone', 'city', 'licenseNumber']);
+    }
+
+    // Bookings collection
+    match /bookings/{bookingId} {
+      allow get: if isSignedIn() && (resource.data.customerId == request.auth.uid || resource.data.technicianId == request.auth.uid);
+      allow list: if isSignedIn() && (resource.data.customerId == request.auth.uid || resource.data.technicianId == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(bookingId)
+        && incoming().customerId == request.auth.uid
+        && incoming().totalSAR is number && incoming().totalSAR >= 0
+        && incoming().serviceId is string;
+      allow update: if isSignedIn()
+        && (resource.data.customerId == request.auth.uid || resource.data.technicianId == request.auth.uid)
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'paymentStatus', 'technicianId']);
+    }
+
+    // Quotes collection
+    match /quotes/{quoteId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(quoteId)
+        && incoming().customerId == request.auth.uid
+        && incoming().title is string && incoming().title.size() <= 150
+        && incoming().description is string && incoming().description.size() <= 1000;
+      allow update: if isSignedIn()
+        && (resource.data.customerId == request.auth.uid)
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'awardedBidId']);
+
+      // Bids subcollection
+      match /bids/{bidId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(bidId)
+          && incoming().technicianId == request.auth.uid
+          && incoming().priceSAR is number && incoming().priceSAR > 0
+          && incoming().proposal is string && incoming().proposal.size() <= 800;
+        allow update: if isSignedIn() && resource.data.technicianId == request.auth.uid
+          && incoming().diff(existing()).affectedKeys().hasOnly(['priceSAR', 'estimatedDays', 'proposal']);
+      }
+    }
+
+    // Transactions collection
+    match /transactions/{transactionId} {
+      allow get: if isSignedIn() && (resource.data.customerId == request.auth.uid);
+      allow list: if isSignedIn() && (resource.data.customerId == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(transactionId)
+        && incoming().customerId == request.auth.uid
+        && incoming().amountSAR is number && incoming().amountSAR >= 0;
+      allow update: if false; // Transactions are immutable ledger entries
+    }
+  }
+}
