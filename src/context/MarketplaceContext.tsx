@@ -13,6 +13,12 @@ import {
   ProviderWeeklySettings,
   UserLoyaltyProfile,
   LoyaltyTransaction,
+  SubscriptionPlan,
+  UserSubscription,
+  RecurringVisit,
+  SubscriptionBillingCycle,
+  SubscriptionBillingMethod,
+  SubscriptionBillingInvoiceItem,
 } from '../types';
 import {
   INITIAL_SERVICES,
@@ -24,6 +30,8 @@ import {
   INITIAL_LOYALTY_PROFILE,
   INITIAL_LOYALTY_TRANSACTIONS,
   STANDARD_TIME_SLOTS,
+  INITIAL_SUBSCRIPTION_PLANS,
+  INITIAL_USER_SUBSCRIPTIONS,
 } from '../data/mockData';
 
 interface MarketplaceContextType {
@@ -58,8 +66,14 @@ interface MarketplaceContextType {
   awardBid: (quoteId: string, bidId: string) => void;
   searchFilter: string;
   setSearchFilter: (query: string) => void;
+  selectedRegion: string;
+  setSelectedRegion: (region: string) => void;
   selectedCity: string;
   setSelectedCity: (city: string) => void;
+  isMobileMenuOpen: boolean;
+  setIsMobileMenuOpen: (open: boolean) => void;
+  isCoverageModalOpen: boolean;
+  setIsCoverageModalOpen: (open: boolean) => void;
   toastMessage: string | null;
   showToast: (msg: string) => void;
 
@@ -88,6 +102,49 @@ interface MarketplaceContextType {
   setIsLoyaltyModalOpen: (open: boolean) => void;
   redeemPoints: (points: number, bookingId?: string) => number;
   earnPoints: (sarSpent: number, bookingId?: string, serviceTitleAr?: string, serviceTitleEn?: string) => void;
+
+  // Recurring Subscriptions & Automated Scheduling Extensions
+  subscriptionPlans: SubscriptionPlan[];
+  userSubscriptions: UserSubscription[];
+  activeSubscription: UserSubscription | null;
+  isSubscriptionCheckoutOpen: boolean;
+  setIsSubscriptionCheckoutOpen: (open: boolean) => void;
+  selectedPlanForCheckout: SubscriptionPlan | null;
+  setSelectedPlanForCheckout: (plan: SubscriptionPlan | null) => void;
+  subscribeToPlan: (
+    plan: SubscriptionPlan,
+    options: {
+      billingCadence: SubscriptionBillingCycle;
+      preferredDayOfWeek: number;
+      preferredTimeSlot: string;
+      city: string;
+      district: string;
+      streetAddress?: string;
+      nationalAddressCode?: string;
+      billingMethod: SubscriptionBillingMethod;
+      lockTechnician?: boolean;
+      preferredTechId?: string;
+      preferredTechName?: string;
+    }
+  ) => UserSubscription;
+  rescheduleRecurringVisit: (
+    subscriptionId: string,
+    visitId: string,
+    newDate: string,
+    newSlot: string
+  ) => void;
+  skipRecurringVisit: (subscriptionId: string, visitId: string) => void;
+  toggleTechnicianLock: (
+    subscriptionId: string,
+    lock: boolean,
+    preferredTechId?: string,
+    preferredTechName?: string
+  ) => void;
+  pauseSubscription: (subscriptionId: string) => void;
+  resumeSubscription: (subscriptionId: string) => void;
+  cancelSubscription: (subscriptionId: string) => void;
+  triggerSubscriptionBillingCycle: (subscriptionId: string) => void;
+  downloadCalendarEvent: (visit: RecurringVisit, subscription: UserSubscription) => void;
 }
 
 const MarketplaceContext = createContext<MarketplaceContextType | undefined>(undefined);
@@ -116,7 +173,10 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
   const [searchFilter, setSearchFilter] = useState('');
-  const [selectedCity, setSelectedCity] = useState('الرياض');
+  const [selectedRegion, setSelectedRegion] = useState('all');
+  const [selectedCity, setSelectedCity] = useState('الرياض (العاصمة)');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isCoverageModalOpen, setIsCoverageModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Notifications State
@@ -165,6 +225,15 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const [isLoyaltyModalOpen, setIsLoyaltyModalOpen] = useState(false);
 
+  // Recurring Subscriptions State
+  const [subscriptionPlans] = useState<SubscriptionPlan[]>(INITIAL_SUBSCRIPTION_PLANS);
+  const [userSubscriptions, setUserSubscriptions] = useState<UserSubscription[]>(() => {
+    const saved = localStorage.getItem('mutqin_user_subscriptions');
+    return saved ? JSON.parse(saved) : INITIAL_USER_SUBSCRIPTIONS;
+  });
+  const [isSubscriptionCheckoutOpen, setIsSubscriptionCheckoutOpen] = useState(false);
+  const [selectedPlanForCheckout, setSelectedPlanForCheckout] = useState<SubscriptionPlan | null>(null);
+
   // Sync HTML dir and lang attributes
   useEffect(() => {
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
@@ -203,6 +272,10 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
   useEffect(() => {
     localStorage.setItem('mutqin_loyalty_history', JSON.stringify(loyaltyHistory));
   }, [loyaltyHistory]);
+
+  useEffect(() => {
+    localStorage.setItem('mutqin_user_subscriptions', JSON.stringify(userSubscriptions));
+  }, [userSubscriptions]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -450,14 +523,15 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
     );
 
     // Create real-time notification for technician
+    const isPending = newBooking.status === 'pending';
     const techNotif: MarketplaceNotification = {
       id: `notif-${Date.now()}-tech`,
       recipientRole: 'technician',
       type: 'new_booking',
-      titleAr: 'طلب موعد صيانة جديد 🗓️',
-      titleEn: 'New Service Booking Received 🗓️',
-      messageAr: `حجز جديد: "${newBooking.serviceTitleAr}" بواسطة ${newBooking.customerName} ليوم ${newBooking.date} (${newBooking.timeSlot}) بقيمة ${newBooking.totalSAR} ر.س.`,
-      messageEn: `New booking: "${newBooking.serviceTitleEn}" by ${newBooking.customerName} on ${newBooking.date} (${newBooking.timeSlot}) for ${newBooking.totalSAR} SAR.`,
+      titleAr: isPending ? 'طلب موعد صيانة جديد بانتظار موافقتك ⏳' : 'طلب موعد صيانة جديد 🗓️',
+      titleEn: isPending ? 'New Booking Request Awaiting Acceptance ⏳' : 'New Service Booking Received 🗓️',
+      messageAr: `حجز جديد (${isPending ? 'قيد الانتظار' : 'مؤكد'}): "${newBooking.serviceTitleAr}" بواسطة ${newBooking.customerName} ليوم ${newBooking.date} (${newBooking.timeSlot}) بقيمة ${newBooking.totalSAR} ر.س.`,
+      messageEn: `New booking (${isPending ? 'Pending' : 'Confirmed'}): "${newBooking.serviceTitleEn}" by ${newBooking.customerName} on ${newBooking.date} (${newBooking.timeSlot}) for ${newBooking.totalSAR} SAR.`,
       timestamp: 'الآن',
       isRead: false,
       bookingId: newBooking.id,
@@ -468,10 +542,14 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
       id: `notif-${Date.now()}-cust`,
       recipientRole: 'customer',
       type: 'new_booking',
-      titleAr: 'تم تأكيد موعدك وتوليد الفاتورة الضريبية 🧾',
-      titleEn: 'Appointment Confirmed & ZATCA Invoice Generated 🧾',
-      messageAr: `حجزك برقم #${newBooking.id} مؤكد مع المهندس فيصل العتيبي ليوم ${newBooking.date}. كسبت نقاط مكافآت وتم توليد فاتورة الزكاة والضريبة.`,
-      messageEn: `Your booking #${newBooking.id} is confirmed with Eng. Faisal on ${newBooking.date}. You earned loyalty points and generated your ZATCA invoice.`,
+      titleAr: isPending ? 'طلب الحجز قيد المراجعة والموافقة ⏳' : 'تم تأكيد موعدك وتوليد الفاتورة الضريبية 🧾',
+      titleEn: isPending ? 'Booking Request Submitted (Pending Review) ⏳' : 'Appointment Confirmed & ZATCA Invoice Generated 🧾',
+      messageAr: isPending
+        ? `حجزك برقم #${newBooking.id} لخدمة ${newBooking.serviceTitleAr} تم استلامه وهو قيد موافقة الفني. كسبت نقاط مكافآت وتم توليد فاتورة الزكاة والضريبة.`
+        : `حجزك برقم #${newBooking.id} مؤكد مع المهندس فيصل العتيبي ليوم ${newBooking.date}. كسبت نقاط مكافآت وتم توليد فاتورة الزكاة والضريبة.`,
+      messageEn: isPending
+        ? `Your booking #${newBooking.id} for "${newBooking.serviceTitleEn}" is pending technician acceptance. Mutqin points awarded and ZATCA tax invoice generated.`
+        : `Your booking #${newBooking.id} is confirmed with Eng. Faisal on ${newBooking.date}. You earned loyalty points and generated your ZATCA invoice.`,
       timestamp: 'الآن',
       isRead: false,
       bookingId: newBooking.id,
@@ -481,7 +559,11 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     showToast(
       language === 'ar'
-        ? `تم تأكيد حجزك برقم #${newBooking.id} وكسب نقاط مُتقَن المكافئة!`
+        ? isPending
+          ? `تم إرسال حجزك برقم #${newBooking.id} بنجاح (قيد مراجعة الفني)!`
+          : `تم تأكيد حجزك برقم #${newBooking.id} وكسب نقاط مُتقَن المكافئة!`
+        : isPending
+        ? `Booking #${newBooking.id} placed (pending technician review)!`
         : `Booking #${newBooking.id} confirmed and Mutqin Points awarded!`
     );
   };
@@ -493,34 +575,51 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     const targetBooking = bookings.find((b) => b.id === bookingId);
     const serviceName = targetBooking?.serviceTitleAr || 'الخدمة';
+    const serviceNameEn = targetBooking?.serviceTitleEn || 'Service';
 
     const notif: MarketplaceNotification = {
       id: `notif-${Date.now()}-status`,
       recipientRole: 'customer',
       type: 'status_update',
       titleAr:
-        status === 'in_progress'
+        status === 'confirmed'
+          ? 'تم قبول وتأكيد موعد الحجز ✅'
+          : status === 'in_progress'
           ? 'الفني في الطريق وبدء المعاينة 🚗'
           : status === 'completed'
           ? 'تم إتمام الصيانة بنجاح ✅'
+          : status === 'cancelled'
+          ? 'تم إلغاء موعد الحجز ❌'
           : 'تحديث حالة الموعد',
       titleEn:
-        status === 'in_progress'
+        status === 'confirmed'
+          ? 'Booking Accepted & Confirmed ✅'
+          : status === 'in_progress'
           ? 'Technician En Route 🚗'
           : status === 'completed'
           ? 'Service Completed ✅'
+          : status === 'cancelled'
+          ? 'Booking Cancelled ❌'
           : 'Booking Status Updated',
       messageAr:
-        status === 'in_progress'
+        status === 'confirmed'
+          ? `وافق الفني على موعد حجز ${serviceName} وتأكدت الزيارة في الموعد المحدد.`
+          : status === 'in_progress'
           ? `الفني في طريقه لموقعك لبدء خدمة ${serviceName}.`
           : status === 'completed'
           ? `تم الانتهاء من تنفيذ ${serviceName}، وتم توثيق الضمان لمدة 30 يوماً.`
+          : status === 'cancelled'
+          ? `تم إلغاء الموعد #${bookingId} لخدمة ${serviceName}.`
           : `تم تحديث الموعد #${bookingId} إلى: ${status}`,
       messageEn:
-        status === 'in_progress'
-          ? `Technician is en route to your address for ${serviceName}.`
+        status === 'confirmed'
+          ? `Technician has accepted your booking for ${serviceNameEn}. Visit confirmed.`
+          : status === 'in_progress'
+          ? `Technician is en route to your address for ${serviceNameEn}.`
           : status === 'completed'
-          ? `Service ${serviceName} completed with 30-day warranty active.`
+          ? `Service ${serviceNameEn} completed with 30-day warranty active.`
+          : status === 'cancelled'
+          ? `Booking #${bookingId} for ${serviceNameEn} has been cancelled.`
           : `Booking #${bookingId} status is now ${status}.`,
       timestamp: 'الآن',
       isRead: false,
@@ -529,9 +628,17 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     setNotifications((prev) => [notif, ...prev]);
 
+    const statusLabelsAr: Record<string, string> = {
+      pending: 'قيد الانتظار',
+      confirmed: 'مؤكد',
+      in_progress: 'قيد التنفيذ',
+      completed: 'مكتمل',
+      cancelled: 'ملغي',
+    };
+
     showToast(
       language === 'ar'
-        ? `تم تحديث حالة الحجز إلى: ${status}`
+        ? `تم تحديث حالة الحجز إلى: ${statusLabelsAr[status] || status}`
         : `Booking status updated to: ${status}`
     );
   };
@@ -657,6 +764,463 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
     );
   };
 
+  // ==========================================
+  // RECURRING SUBSCRIPTIONS & AUTOMATED SCHEDULING LOGIC
+  // ==========================================
+
+  const activeSubscription =
+    userSubscriptions.find((s) => s.status === 'active') ||
+    userSubscriptions[0] ||
+    null;
+
+  const subscribeToPlan = (
+    plan: SubscriptionPlan,
+    options: {
+      billingCadence: SubscriptionBillingCycle;
+      preferredDayOfWeek: number;
+      preferredTimeSlot: string;
+      city: string;
+      district: string;
+      streetAddress?: string;
+      nationalAddressCode?: string;
+      billingMethod: SubscriptionBillingMethod;
+      lockTechnician?: boolean;
+      preferredTechId?: string;
+      preferredTechName?: string;
+    }
+  ): UserSubscription => {
+    const subId = `SUB-MUTQ-${Math.floor(1000 + Math.random() * 9000)}`;
+    const today = new Date();
+    const startDateStr = today.toISOString().split('T')[0];
+
+    // Compute Renewal Date (+30, +90, or +365 days)
+    const renewalDays =
+      options.billingCadence === 'annual'
+        ? 365
+        : options.billingCadence === 'quarterly'
+        ? 90
+        : 30;
+    const renewalDate = new Date(today.getTime() + renewalDays * 24 * 60 * 60 * 1000);
+    const nextRenewalStr = renewalDate.toISOString().split('T')[0];
+
+    // Compute cycle price with discounts
+    let subtotalSAR = plan.basePriceSAR;
+    if (options.billingCadence === 'quarterly') {
+      subtotalSAR = Math.round(plan.basePriceSAR * 3 * 0.9); // 10% off quarterly
+    } else if (options.billingCadence === 'annual') {
+      subtotalSAR = Math.round(plan.basePriceSAR * 12 * 0.8); // 20% off annual
+    }
+    const vatRate = 0.15;
+    const vatSAR = Math.round(subtotalSAR * vatRate * 100) / 100;
+    const totalSAR = Math.round((subtotalSAR + vatSAR) * 100) / 100;
+
+    // Generate initial recurring visits for the current month cycle
+    const visitsCount = plan.visitsPerMonth > 0 ? plan.visitsPerMonth : 1;
+    const intervalDays =
+      plan.cadence === 'weekly' ? 7 : plan.cadence === 'biweekly' ? 14 : 30;
+
+    const visits: RecurringVisit[] = [];
+    for (let i = 0; i < visitsCount; i++) {
+      const visitDate = new Date(today.getTime() + (i * intervalDays + 3) * 24 * 60 * 60 * 1000);
+      const visitDateStr = visitDate.toISOString().split('T')[0];
+
+      visits.push({
+        id: `visit-${subId}-${i + 1}`,
+        subscriptionId: subId,
+        visitNumber: i + 1,
+        scheduledDate: visitDateStr,
+        timeSlot: options.preferredTimeSlot,
+        status: 'scheduled',
+        serviceTitleAr: `زيارة دورية مجدولة #${i + 1} (${plan.nameAr})`,
+        serviceTitleEn: `Scheduled Recurring Visit #${i + 1} (${plan.nameEn})`,
+        technicianId: options.lockTechnician ? options.preferredTechId || 'tech-faisal' : 'tech-faisal',
+        technicianName: options.lockTechnician
+          ? options.preferredTechName || 'م. فيصل العتيبي (الفني المعتمد)'
+          : 'م. فيصل العتيبي (فني مناوب معتمد)',
+        technicianPhone: '+966501234567',
+        technicianRating: 4.95,
+        checklist: plan.includedServicesAr.map((titleAr, idx) => ({
+          titleAr,
+          titleEn: plan.includedServicesEn[idx] || titleAr,
+          completed: false,
+        })),
+      });
+    }
+
+    const firstVisitDate = visits[0]?.scheduledDate || startDateStr;
+
+    // Generate Initial ZATCA Invoice
+    const invoiceNo = `INV-2026-${subId}-M1`;
+    const initialInvoice: SubscriptionBillingInvoiceItem = {
+      id: `inv-${Date.now()}`,
+      date: startDateStr,
+      billingCycleNumber: 1,
+      amountSAR: totalSAR,
+      subtotalSAR,
+      vatSAR,
+      invoiceNo,
+      method: options.billingMethod,
+      status: 'paid',
+      zatcaQrPayload: 'AQ5NdXRxaW4gU2F1ZGkCCzMxMDk4NDkyMDEwMDMDAzIwMjYtMTAtMTRUMDk6MDA6MDBaBAY' + totalSAR + 'FBjEwMy41MA==',
+    };
+
+    const newSub: UserSubscription = {
+      id: subId,
+      planId: plan.id,
+      planNameAr: plan.nameAr,
+      planNameEn: plan.nameEn,
+      planType: plan.planType,
+      category: plan.category,
+      status: 'active',
+      cadence: plan.cadence,
+      billingCadence: options.billingCadence,
+      preferredDayOfWeek: options.preferredDayOfWeek,
+      preferredTimeSlot: options.preferredTimeSlot,
+      preferredTechnicianId: options.preferredTechId || 'tech-faisal',
+      preferredTechnicianName: options.preferredTechName || 'م. فيصل العتيبي',
+      lockPreferredTechnician: !!options.lockTechnician,
+      city: options.city,
+      district: options.district,
+      streetAddress: options.streetAddress || '',
+      nationalAddressCode: options.nationalAddressCode || 'RDHA-5521-KSA',
+      startDate: startDateStr,
+      nextRenewalDate: nextRenewalStr,
+      nextVisitDate: firstVisitDate,
+      billingMethod: options.billingMethod,
+      pricePerCycleSAR: subtotalSAR,
+      vatSAR,
+      totalPerCycleSAR: totalSAR,
+      autoRenew: true,
+      visits,
+      billingHistory: [initialInvoice],
+      createdAt: today.toISOString(),
+    };
+
+    setUserSubscriptions((prev) => [newSub, ...prev]);
+
+    // Award loyalty points bonus (+50 points)
+    earnPoints(subtotalSAR, subId, plan.nameAr, plan.nameEn);
+
+    // Create Notification
+    const notif: MarketplaceNotification = {
+      id: `notif-${Date.now()}-sub`,
+      recipientRole: 'customer',
+      type: 'new_booking',
+      titleAr: `تم تفعيل اشتراكك بنجاح في ${plan.nameAr} 🎉`,
+      titleEn: `Subscription Activated: ${plan.nameEn} 🎉`,
+      messageAr: `تمت جدولة أولى زيارات الصيانة الدورية بتاريخ ${firstVisitDate}. يمكنك تعديل أو تأجيل المواعيد في أي وقت دون رسوم.`,
+      messageEn: `First recurring visit scheduled on ${firstVisitDate}. You can reschedule or skip visits anytime with no fees.`,
+      timestamp: 'الآن',
+      isRead: false,
+      bookingId: subId,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    showToast(
+      language === 'ar'
+        ? `تم تفعيل اشتراك ${plan.nameAr} وجدولة الزيارات بنجاح! 🇸🇦`
+        : `Subscription ${plan.nameEn} activated with automated scheduling!`
+    );
+
+    return newSub;
+  };
+
+  const rescheduleRecurringVisit = (
+    subscriptionId: string,
+    visitId: string,
+    newDate: string,
+    newSlot: string
+  ) => {
+    setUserSubscriptions((prev) =>
+      prev.map((sub) => {
+        if (sub.id !== subscriptionId) return sub;
+
+        const updatedVisits = sub.visits.map((v) =>
+          v.id === visitId
+            ? { ...v, scheduledDate: newDate, timeSlot: newSlot, status: 'rescheduled' as const }
+            : v
+        );
+
+        // Find nearest future visit
+        const activeVisits = updatedVisits
+          .filter((v) => v.status === 'scheduled' || v.status === 'rescheduled')
+          .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+
+        return {
+          ...sub,
+          visits: updatedVisits,
+          nextVisitDate: activeVisits[0]?.scheduledDate || sub.nextVisitDate,
+        };
+      })
+    );
+
+    const notif: MarketplaceNotification = {
+      id: `notif-${Date.now()}-resched`,
+      recipientRole: 'customer',
+      type: 'reschedule',
+      titleAr: 'تم تحديث موعد الزيارة الدورية 🗓️',
+      titleEn: 'Recurring Visit Rescheduled 🗓️',
+      messageAr: `تم نقل موعد زيارة الصيانة إلى ${newDate} (${newSlot}). تم تحديث تقويم الفني المعتمد.`,
+      messageEn: `Visit rescheduled to ${newDate} (${newSlot}). Assigned technician schedule updated.`,
+      timestamp: 'الآن',
+      isRead: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    showToast(
+      language === 'ar'
+        ? `تم تأكيد الموعد الجديد للزيارة في ${newDate} بنجاح!`
+        : `Visit successfully rescheduled to ${newDate}!`
+    );
+  };
+
+  const skipRecurringVisit = (subscriptionId: string, visitId: string) => {
+    setUserSubscriptions((prev) =>
+      prev.map((sub) => {
+        if (sub.id !== subscriptionId) return sub;
+
+        const updatedVisits = sub.visits.map((v) =>
+          v.id === visitId ? { ...v, status: 'skipped' as const } : v
+        );
+
+        const activeVisits = updatedVisits
+          .filter((v) => v.status === 'scheduled' || v.status === 'rescheduled')
+          .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+
+        return {
+          ...sub,
+          visits: updatedVisits,
+          nextVisitDate: activeVisits[0]?.scheduledDate || sub.nextVisitDate,
+        };
+      })
+    );
+
+    const notif: MarketplaceNotification = {
+      id: `notif-${Date.now()}-skip`,
+      recipientRole: 'customer',
+      type: 'status_update',
+      titleAr: 'تم تخطي الزيارة الدورية بنجاح ⏭️',
+      titleEn: 'Visit Skipped & Rolled Over ⏭️',
+      messageAr: 'تم تخطي الزيارة وترحيل رصيدها للشهر القادم دون أي خصم مالي.',
+      messageEn: 'Visit was skipped and rolled over to your next cycle balance with 0 penalty.',
+      timestamp: 'الآن',
+      isRead: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    showToast(
+      language === 'ar'
+        ? 'تم تخطي الزيارة وترحيلها بنجاح دون أي خصم!'
+        : 'Visit skipped and rolled over to next cycle without fee!'
+    );
+  };
+
+  const toggleTechnicianLock = (
+    subscriptionId: string,
+    lock: boolean,
+    preferredTechId?: string,
+    preferredTechName?: string
+  ) => {
+    setUserSubscriptions((prev) =>
+      prev.map((sub) => {
+        if (sub.id !== subscriptionId) return sub;
+
+        const updatedVisits = sub.visits.map((v) => {
+          if (v.status === 'scheduled' || v.status === 'rescheduled') {
+            return {
+              ...v,
+              technicianId: lock ? preferredTechId || sub.preferredTechnicianId : undefined,
+              technicianName: lock
+                ? `${preferredTechName || sub.preferredTechnicianName || 'الفني المعتمد'} (مثبت)`
+                : 'فني معتمد مناوب (تعيين مرن تلقائي)',
+            };
+          }
+          return v;
+        });
+
+        return {
+          ...sub,
+          lockPreferredTechnician: lock,
+          preferredTechnicianId: preferredTechId || sub.preferredTechnicianId,
+          preferredTechnicianName: preferredTechName || sub.preferredTechnicianName,
+          visits: updatedVisits,
+        };
+      })
+    );
+
+    showToast(
+      language === 'ar'
+        ? lock
+          ? 'تم تثبيت الفني المفضل لكافة الزيارات الدورية القادمة!'
+          : 'تم تفعيل التوزيع التلقائي للأقرب جغرافياً لسرعة الإنجاز!'
+        : lock
+        ? 'Preferred technician locked for all recurring visits!'
+        : 'Dynamic nearest-technician auto assignment enabled!'
+    );
+  };
+
+  const pauseSubscription = (subscriptionId: string) => {
+    setUserSubscriptions((prev) =>
+      prev.map((s) => (s.id === subscriptionId ? { ...s, status: 'paused' as const } : s))
+    );
+    showToast(
+      language === 'ar'
+        ? 'تم إيقاف الاشتراك مؤقتاً. يمكنك استئنافه في أي وقت!'
+        : 'Subscription paused. You can resume anytime!'
+    );
+  };
+
+  const resumeSubscription = (subscriptionId: string) => {
+    setUserSubscriptions((prev) =>
+      prev.map((s) => (s.id === subscriptionId ? { ...s, status: 'active' as const } : s))
+    );
+    showToast(
+      language === 'ar'
+        ? 'تم استئناف الاشتراك وتفعيل جدول المواعيد التلقائي!'
+        : 'Subscription resumed! Automated schedule active.'
+    );
+  };
+
+  const cancelSubscription = (subscriptionId: string) => {
+    setUserSubscriptions((prev) =>
+      prev.map((s) => (s.id === subscriptionId ? { ...s, status: 'cancelled' as const } : s))
+    );
+    showToast(
+      language === 'ar'
+        ? 'تم إلغاء التجديد التلقائي للاشتراك بنجاح.'
+        : 'Subscription auto-renew cancelled successfully.'
+    );
+  };
+
+  const triggerSubscriptionBillingCycle = (subscriptionId: string) => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    setUserSubscriptions((prev) =>
+      prev.map((sub) => {
+        if (sub.id !== subscriptionId) return sub;
+
+        const nextCycleNum = (sub.billingHistory.length || 0) + 1;
+        const invoiceNo = `INV-2026-${sub.id}-M${nextCycleNum}`;
+
+        const newInvoice: SubscriptionBillingInvoiceItem = {
+          id: `inv-${Date.now()}`,
+          date: todayStr,
+          billingCycleNumber: nextCycleNum,
+          amountSAR: sub.totalPerCycleSAR,
+          subtotalSAR: sub.pricePerCycleSAR,
+          vatSAR: sub.vatSAR,
+          invoiceNo,
+          method: sub.billingMethod,
+          status: 'paid',
+          zatcaQrPayload:
+            'AQ5NdXRxaW4gU2F1ZGkCCzMxMDk4NDkyMDEwMDMDAzIwMjYtMTAtMTRUMDk6MDA6MDBaBAY' +
+            sub.totalPerCycleSAR +
+            'FBj' +
+            sub.vatSAR,
+        };
+
+        // Generate 4 visits for the new upcoming month
+        const newVisits: RecurringVisit[] = [];
+        const intervalDays = sub.cadence === 'weekly' ? 7 : sub.cadence === 'biweekly' ? 14 : 30;
+        const visitsCount = sub.cadence === 'weekly' ? 4 : sub.cadence === 'biweekly' ? 2 : 1;
+
+        for (let i = 0; i < visitsCount; i++) {
+          const vDate = new Date(today.getTime() + (i * intervalDays + 3) * 24 * 60 * 60 * 1000);
+          newVisits.push({
+            id: `visit-${sub.id}-c${nextCycleNum}-${i + 1}`,
+            subscriptionId: sub.id,
+            visitNumber: i + 1,
+            scheduledDate: vDate.toISOString().split('T')[0],
+            timeSlot: sub.preferredTimeSlot,
+            status: 'scheduled',
+            serviceTitleAr: `زيارة دورية مجدولة - دورة ${nextCycleNum} (#${i + 1})`,
+            serviceTitleEn: `Scheduled Recurring Visit - Cycle ${nextCycleNum} (#${i + 1})`,
+            technicianId: sub.preferredTechnicianId || 'tech-faisal',
+            technicianName: sub.preferredTechnicianName || 'م. فيصل العتيبي',
+            technicianPhone: '+966501234567',
+            technicianRating: 4.95,
+            checklist: [
+              { titleAr: 'فحص التكييف والتبريد والمحركات', titleEn: 'AC cooling & motor audit', completed: false },
+              { titleAr: 'غسيل الفلاتر وتعقيم الهواء', titleEn: 'Filter cleanse & sanitization', completed: false },
+              { titleAr: 'تدقيق شبكة السباكة وتوازن المضخات', titleEn: 'Plumbing & pump audit', completed: false },
+            ],
+          });
+        }
+
+        const nextRenewalDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split('T')[0];
+
+        return {
+          ...sub,
+          nextRenewalDate,
+          nextVisitDate: newVisits[0]?.scheduledDate || sub.nextVisitDate,
+          visits: [...sub.visits, ...newVisits],
+          billingHistory: [newInvoice, ...sub.billingHistory],
+        };
+      })
+    );
+
+    earnPoints(100, subscriptionId, 'تجديد اشتراك دوري', 'Recurring subscription renewal');
+
+    showToast(
+      language === 'ar'
+        ? 'تمت محاكاة التجديد التلقائي بنجاح: تم خصم الدورة وإصدار فاتورة ZATCA الضريبية!'
+        : 'Billing renewal processed: ZATCA tax invoice generated & schedule populated!'
+    );
+  };
+
+  const downloadCalendarEvent = (visit: RecurringVisit, subscription: UserSubscription) => {
+    const title = language === 'ar' ? visit.serviceTitleAr : visit.serviceTitleEn;
+    const location = `${subscription.city} - ${subscription.district} (${subscription.nationalAddressCode || 'KSA'})`;
+    const description = `${title}\\nالفني: ${visit.technicianName || 'مُتقَن الفني المعتمد'}\\nرقم الاشتراك: ${subscription.id}`;
+
+    const dateClean = visit.scheduledDate.replace(/-/g, '');
+    const startTime = `${dateClean}T090000Z`;
+    const endTime = `${dateClean}T113000Z`;
+
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Mutqin Care//Saudi Home Maintenance//AR',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:${visit.id}@mutqin.sa`,
+      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
+      `DTSTART:${startTime}`,
+      `DTEND:${endTime}`,
+      `SUMMARY:${title}`,
+      `DESCRIPTION:${description}`,
+      `LOCATION:${location}`,
+      'STATUS:CONFIRMED',
+      'BEGIN:VALARM',
+      'TRIGGER:-PT2H',
+      'ACTION:DISPLAY',
+      'DESCRIPTION:تذكير: موعد زيارة صيانة مُتقَن المجدولة اليوم',
+      'END:VALARM',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `mutqin-visit-${visit.scheduledDate}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast(
+      language === 'ar'
+        ? 'تم تحميل ملف التقويم (.ics). متوافق مع Apple Calendar و Google Calendar!'
+        : 'Calendar event (.ics) downloaded. Compatible with Apple & Google Calendar!'
+    );
+  };
+
   return (
     <MarketplaceContext.Provider
       value={{
@@ -691,8 +1255,14 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
         awardBid,
         searchFilter,
         setSearchFilter,
+        selectedRegion,
+        setSelectedRegion,
         selectedCity,
         setSelectedCity,
+        isMobileMenuOpen,
+        setIsMobileMenuOpen,
+        isCoverageModalOpen,
+        setIsCoverageModalOpen,
         toastMessage,
         showToast,
 
@@ -716,6 +1286,23 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setIsLoyaltyModalOpen,
         redeemPoints,
         earnPoints,
+
+        subscriptionPlans,
+        userSubscriptions,
+        activeSubscription,
+        isSubscriptionCheckoutOpen,
+        setIsSubscriptionCheckoutOpen,
+        selectedPlanForCheckout,
+        setSelectedPlanForCheckout,
+        subscribeToPlan,
+        rescheduleRecurringVisit,
+        skipRecurringVisit,
+        toggleTechnicianLock,
+        pauseSubscription,
+        resumeSubscription,
+        cancelSubscription,
+        triggerSubscriptionBillingCycle,
+        downloadCalendarEvent,
       }}
     >
       {children}

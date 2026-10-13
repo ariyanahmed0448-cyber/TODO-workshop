@@ -1,6 +1,6 @@
 import React from 'react';
 import { useMarketplace } from '../context/MarketplaceContext';
-import { Sparkles, Globe, UserCheck, ShieldCheck, Bell, Award } from 'lucide-react';
+import { Sparkles, Globe, ShieldCheck, Bell, Award, Menu, MapPin } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const {
@@ -16,31 +16,42 @@ export const Navbar: React.FC = () => {
     setIsNotificationCenterOpen,
     loyaltyProfile,
     setIsLoyaltyModalOpen,
+    selectedCity,
+    setIsCoverageModalOpen,
+    setIsMobileMenuOpen,
   } = useMarketplace();
 
   const isAr = language === 'ar';
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-8 h-18">
-          {/* Zone 1: Brand Wordmark (Single text element wordmark in display face) */}
-          <div className="flex items-center gap-3 shrink-0">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between gap-2 sm:gap-6 h-16 sm:h-18">
+          {/* Zone 1: Brand Wordmark + Saudi Coverage Quick Indicator */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
               onClick={() => setActiveTab('home')}
-              className="text-2xl font-bold tracking-tight text-slate-900 whitespace-nowrap hover:opacity-90 transition-opacity flex items-center gap-2"
+              className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 whitespace-nowrap hover:opacity-90 transition-opacity flex items-center gap-1.5 sm:gap-2"
             >
               <span className="text-emerald-800 font-extrabold">مُتقَن</span>
-              <span className="text-slate-400 font-normal text-lg">|</span>
-              <span className="text-slate-800 font-semibold text-lg tracking-normal">Mutqin</span>
+              <span className="text-slate-400 font-normal text-base sm:text-lg">|</span>
+              <span className="text-slate-800 font-semibold text-base sm:text-lg tracking-normal">Mutqin</span>
             </button>
-            <span className="hidden sm:inline-block text-xs text-slate-500 font-medium border-l border-slate-200 pl-3 ml-1 rtl:border-l-0 rtl:border-r rtl:pr-3 rtl:mr-1">
-              {isAr ? 'منصة الصيانة المعتمدة' : 'Verified Saudi Services'}
-            </span>
+
+            {/* Saudi Coverage Quick Pill */}
+            <button
+              onClick={() => setIsCoverageModalOpen(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[11px] font-semibold text-emerald-900 transition-colors shrink-0"
+              title={isAr ? 'تغطية كافة مناطق ومدن المملكة العربية السعودية' : 'All 13 Saudi Regions Covered'}
+            >
+              <MapPin className="w-3 h-3 text-emerald-700 shrink-0" />
+              <span className="max-w-[85px] sm:max-w-none truncate">{selectedCity}</span>
+              <span className="hidden xs:inline text-[9px] bg-emerald-700 text-white px-1 rounded font-bold">13🇸🇦</span>
+            </button>
           </div>
 
-          {/* Zone 2: 4-5 Concise Single-line Nav Links */}
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
+          {/* Zone 2: Desktop 4-5 Concise Single-line Nav Links */}
+          <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate-600">
             <button
               onClick={() => setActiveTab('services')}
               className={`whitespace-nowrap transition-colors py-1 ${
@@ -50,6 +61,19 @@ export const Navbar: React.FC = () => {
               }`}
             >
               {isAr ? 'خدمات الصيانة' : 'Services'}
+            </button>
+            <button
+              onClick={() => setActiveTab('subscriptions_catalog')}
+              className={`whitespace-nowrap transition-colors py-1 flex items-center gap-1 ${
+                activeTab === 'subscriptions_catalog' || activeTab === 'subscriptions'
+                  ? 'text-emerald-800 font-semibold border-b-2 border-emerald-800'
+                  : 'hover:text-slate-900'
+              }`}
+            >
+              <span>{isAr ? 'اشتراكات الصيانة (Care Pass)' : 'Care Subscriptions'}</span>
+              <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-md">
+                {isAr ? 'جديد' : 'NEW'}
+              </span>
             </button>
             <button
               onClick={() => setActiveTab('quotes')}
@@ -99,10 +123,10 @@ export const Navbar: React.FC = () => {
             </button>
           </nav>
 
-          {/* Zone 3: 1 Primary Action + Utility Controls */}
-          <div className="flex items-center gap-3 shrink-0">
-            {/* Persona Switcher */}
-            <div className="hidden lg:flex items-center bg-slate-100 rounded-lg p-0.5 text-xs">
+          {/* Zone 3: Mobile & Desktop Controls */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            {/* Desktop Persona Switcher */}
+            <div className="hidden xl:flex items-center bg-slate-100 rounded-lg p-0.5 text-xs">
               <button
                 onClick={() => {
                   setRole('customer');
@@ -134,24 +158,21 @@ export const Navbar: React.FC = () => {
             {/* Language Switcher */}
             <button
               onClick={() => setLanguage(isAr ? 'en' : 'ar')}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
               title={isAr ? 'Switch to English' : 'التحويل إلى العربية'}
             >
               <Globe className="w-3.5 h-3.5" />
-              <span>{isAr ? 'English' : 'العربية'}</span>
+              <span className="hidden sm:inline">{isAr ? 'English' : 'العربية'}</span>
             </button>
 
             {/* Mutqin Points Loyalty Button */}
             <button
               onClick={() => setIsLoyaltyModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 rounded-lg transition-colors shrink-0 shadow-2xs"
+              className="flex items-center gap-1 px-2 py-1.5 text-xs font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 rounded-lg transition-colors shrink-0 shadow-2xs"
               title={isAr ? 'محفظة نقاط مُتقَن واستبدال الخصومات' : 'Mutqin Points & Rewards Wallet'}
             >
               <Award className="w-3.5 h-3.5 text-amber-600" />
               <span className="tabular-nums">{loyaltyProfile.pointsBalance}</span>
-              <span className="text-[10px] text-amber-700/80 font-normal">
-                {isAr ? 'نقطة' : 'pts'}
-              </span>
             </button>
 
             {/* Notification Center Bell */}
@@ -168,21 +189,30 @@ export const Navbar: React.FC = () => {
               )}
             </button>
 
-            {/* AI Assistant CTA */}
+            {/* Desktop AI Assistant CTA */}
             <button
               onClick={() => setIsAiModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-emerald-950 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-lg transition-colors whitespace-nowrap"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-950 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-lg transition-colors whitespace-nowrap"
             >
               <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
               <span>{isAr ? 'المستشار الذكي' : 'AI Diagnostic'}</span>
             </button>
 
-            {/* Primary Action Button */}
+            {/* Desktop Primary Action Button */}
             <button
               onClick={() => setActiveTab('services')}
-              className="px-4 py-2 text-xs font-medium text-white bg-emerald-800 hover:bg-emerald-900 rounded-lg transition-colors whitespace-nowrap shadow-xs"
+              className="hidden md:inline-flex px-3.5 py-1.5 text-xs font-medium text-white bg-emerald-800 hover:bg-emerald-900 rounded-lg transition-colors whitespace-nowrap shadow-xs"
             >
               {isAr ? 'احجز خدمة فورية' : 'Book a Service'}
+            </button>
+
+            {/* Mobile Hamburger Menu Toggle Button */}
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="lg:hidden p-2 text-slate-700 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors shrink-0"
+              title={isAr ? 'القائمة الرئيسية' : 'Main Menu'}
+            >
+              <Menu className="w-5 h-5" />
             </button>
           </div>
         </div>

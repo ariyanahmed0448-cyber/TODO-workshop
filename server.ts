@@ -25,12 +25,12 @@ const ai = new GoogleGenAI({
 });
 
 // Helper for rate-limited scientific fetch
-async function fetchWithRetry(url: string, maxRetries = 2, delayMs = 500): Promise<any> {
+async function fetchWithRetry(url: string, maxRetries = 2, delayMs = 500): Promise<Record<string, unknown> | null> {
   for (let i = 0; i <= maxRetries; i++) {
     try {
       const res = await fetch(url);
       if (res.ok) {
-        return await res.json();
+        return (await res.json()) as Record<string, unknown>;
       }
       if (res.status === 429 || res.status >= 500) {
         await new Promise((r) => setTimeout(r, delayMs * Math.pow(2, i)));
@@ -52,7 +52,18 @@ app.get('/api/science/pubchem/:compound', async (req: Request, res: Response) =>
   const compoundQuery = req.params.compound.trim();
   try {
     const url = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(compoundQuery)}/property/MolecularFormula,MolecularWeight,IUPACName,Title,InChIKey/JSON`;
-    const data = await fetchWithRetry(url);
+    const data = (await fetchWithRetry(url)) as {
+      PropertyTable?: {
+        Properties?: Array<{
+          CID?: number;
+          Title?: string;
+          MolecularFormula?: string;
+          MolecularWeight?: string;
+          IUPACName?: string;
+          InChIKey?: string;
+        }>;
+      };
+    } | null;
 
     if (data?.PropertyTable?.Properties?.[0]) {
       const prop = data.PropertyTable.Properties[0];
@@ -71,8 +82,9 @@ app.get('/api/science/pubchem/:compound', async (req: Request, res: Response) =>
     } else {
       res.json({ found: false, message: 'Compound not found in PubChem registry' });
     }
-  } catch (err: any) {
-    res.status(500).json({ error: 'Failed to query PubChem database', details: err?.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to query PubChem database', details: message });
   }
 });
 
@@ -82,7 +94,7 @@ app.get('/api/science/pubchem/:compound', async (req: Request, res: Response) =>
 app.post('/api/gemini/chat', async (req: Request, res: Response) => {
   try {
     const { message, history } = req.body;
-    const contents: any[] = [];
+    const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
 
     if (Array.isArray(history)) {
       for (const item of history) {
@@ -115,9 +127,10 @@ Key guidelines:
     });
 
     res.json({ reply: response.text || 'عذراً، يرجى المحاولة مرة أخرى.' });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Chat error';
     console.error('Gemini chat error:', err);
-    res.status(500).json({ error: 'AI service unavailable', details: err?.message });
+    res.status(500).json({ error: 'AI service unavailable', details: message });
   }
 });
 
@@ -146,9 +159,10 @@ app.post('/api/gemini/search', async (req: Request, res: Response) => {
       groundingChunks: searchChunks,
       webSearchQueries,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Search error';
     console.error('Gemini search error:', err);
-    res.status(500).json({ error: 'Grounding search failed', details: err?.message });
+    res.status(500).json({ error: 'Grounding search failed', details: message });
   }
 });
 
@@ -168,7 +182,7 @@ Provide a thorough, forensic multi-tier engineering breakdown:
 3. Estimated repair scope, required SASO-certified replacement parts, and recommended technician qualification.
 4. Fair market cost estimate breakdown in Saudi Riyals (SAR).`;
 
-    let parts: any[] = [{ text: promptText }];
+    const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [{ text: promptText }];
     if (imageBase64) {
       parts.unshift({
         inlineData: {
@@ -197,9 +211,10 @@ Provide a thorough, forensic multi-tier engineering breakdown:
     }
 
     res.json({ analysis: response.text });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Diagnosis error';
     console.error('Gemini diagnose error:', err);
-    res.status(500).json({ error: 'Diagnosis failed', details: err?.message });
+    res.status(500).json({ error: 'Diagnosis failed', details: message });
   }
 });
 
@@ -220,9 +235,10 @@ app.post('/api/gemini/fast-estimate', async (req: Request, res: Response) => {
     });
 
     res.json({ estimate: response.text });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Estimate error';
     console.error('Fast estimate error:', err);
-    res.status(500).json({ error: 'Fast estimate failed', details: err?.message });
+    res.status(500).json({ error: 'Fast estimate failed', details: message });
   }
 });
 
@@ -231,7 +247,7 @@ app.post('/api/gemini/fast-estimate', async (req: Request, res: Response) => {
 // -------------------------------------------------------------
 app.post('/api/payment/process', async (req: Request, res: Response) => {
   try {
-    const { method, amountSAR, customerName, phone, serviceTitle } = req.body;
+    const { method, amountSAR } = req.body;
 
     const baseAmount = Number(amountSAR) || 100;
     const vatRate = 0.15; // 15% Saudi VAT standard
@@ -269,8 +285,9 @@ app.post('/api/payment/process', async (req: Request, res: Response) => {
       messageEn: `Payment of ${baseAmount} SAR approved via ${method.toUpperCase()}`,
       messageAr: `تمت عملية الدفع بنجاح بمبلغ ${baseAmount} ر.س عبر ${method === 'mada' ? 'مدى' : method === 'apple_pay' ? 'أبل باي' : method === 'stc_pay' ? 'STC Pay' : 'البطاقة الائتمانية'}`,
     });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Payment processing error', details: err?.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Payment error';
+    res.status(500).json({ error: 'Payment processing error', details: message });
   }
 });
 

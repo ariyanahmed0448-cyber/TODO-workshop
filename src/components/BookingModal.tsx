@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useMarketplace } from '../context/MarketplaceContext';
-import { STANDARD_TIME_SLOTS } from '../data/mockData';
+import { STANDARD_TIME_SLOTS, SAUDI_REGIONS, SAUDI_CITIES } from '../data/mockData';
+import { SaudiLocationPicker } from './SaudiLocationPicker';
 import {
   X,
   Calendar,
@@ -12,6 +13,7 @@ import {
   ArrowLeft,
   UserCheck,
   ShieldCheck,
+  Building2,
 } from 'lucide-react';
 
 export const BookingModal: React.FC = () => {
@@ -23,6 +25,7 @@ export const BookingModal: React.FC = () => {
     setIsPaymentModalOpen,
     setPendingBookingData,
     selectedCity,
+    setSelectedCity,
     checkSlotAvailability,
     blockedDayOffDates,
     showToast,
@@ -67,6 +70,19 @@ export const BookingModal: React.FC = () => {
   const [customerPhone, setCustomerPhone] = useState('0551234567');
   const [notes, setNotes] = useState('');
 
+  const [locationMeta, setLocationMeta] = useState<{
+    lat: number;
+    lng: number;
+    accuracy?: number;
+    shortCode?: string;
+    isGpsDetected?: boolean;
+  }>({
+    lat: 24.7136,
+    lng: 46.6753,
+    shortCode: 'RYDH4281',
+    isGpsDetected: false,
+  });
+
   if (!isBookingModalOpen || !selectedServiceForBooking) return null;
 
   const title = isAr ? selectedServiceForBooking.titleAr : selectedServiceForBooking.titleEn;
@@ -105,11 +121,19 @@ export const BookingModal: React.FC = () => {
       serviceId: selectedServiceForBooking.id,
       serviceTitleEn: selectedServiceForBooking.titleEn,
       serviceTitleAr: selectedServiceForBooking.titleAr,
+      status: 'pending',
+      paymentStatus: 'pending',
       totalSAR: totalPriceSAR,
       date: selectedDate,
       timeSlot: activeSlotLabel,
       addressCity: selectedCity,
       addressDistrict: district,
+      streetAddress: streetAddress,
+      latitude: locationMeta.lat,
+      longitude: locationMeta.lng,
+      locationAccuracyMeters: locationMeta.accuracy,
+      nationalAddressCode: locationMeta.shortCode,
+      locationDetectedViaGps: locationMeta.isGpsDetected,
       notes,
     });
     setIsBookingModalOpen(false);
@@ -324,57 +348,162 @@ export const BookingModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Step 4: Saudi National Address Information */}
-          <div className="space-y-3">
-            <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-emerald-800" />
-              <span>{isAr ? '4. العنوان الوطني وبيانات العميل' : '4. National Address & Contact'}</span>
-            </label>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <input
-                  type="text"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder={isAr ? 'اسم المستلم الثلاثي' : 'Full Name'}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-800"
-                  required
-                />
-              </div>
-              <div>
-                <input
-                  type="tel"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="0551234567"
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-800"
-                  required
-                />
-              </div>
+          {/* Step 4: Saudi National Address & GPS Location Dispatch */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-emerald-800" />
+                <span>{isAr ? '4. تحديد الموقع والعنوان الوطني في المملكة' : '4. Location Picker & Saudi National Address'}</span>
+              </label>
+              <span className="text-[11px] text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                {isAr ? 'تغطية معتمدة لـ 13 منطقة' : 'All 13 Saudi Regions'}
+              </span>
             </div>
 
+            {/* Browser Geolocation & Address Search Picker */}
+            <SaudiLocationPicker
+              selectedCity={selectedCity}
+              onCityChange={(newCity) => {
+                setSelectedCity(newCity);
+                const foundCity = SAUDI_CITIES.find(
+                  (c) => (isAr ? c.nameAr : c.nameEn) === newCity
+                );
+                if (foundCity && foundCity.districtsAr.length > 0) {
+                  setDistrict(isAr ? foundCity.districtsAr[0] : foundCity.districtsEn[0]);
+                }
+              }}
+              district={district}
+              onDistrictChange={setDistrict}
+              streetAddress={streetAddress}
+              onStreetAddressChange={setStreetAddress}
+              onLocationDetected={(loc) => {
+                setLocationMeta({
+                  lat: loc.lat,
+                  lng: loc.lng,
+                  accuracy: loc.accuracy,
+                  shortCode: loc.shortCode,
+                  isGpsDetected: true,
+                });
+              }}
+            />
+
+            {/* City & Manual Province Selector */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
+                <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+                  {isAr ? 'المدينة / المحافظة:' : 'City / Province:'}
+                </label>
+                <select
+                  value={selectedCity}
+                  onChange={(e) => {
+                    const newCity = e.target.value;
+                    setSelectedCity(newCity);
+                    const foundCity = SAUDI_CITIES.find(
+                      (c) => (isAr ? c.nameAr : c.nameEn) === newCity
+                    );
+                    if (foundCity && foundCity.districtsAr.length > 0) {
+                      setDistrict(isAr ? foundCity.districtsAr[0] : foundCity.districtsEn[0]);
+                    }
+                  }}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                >
+                  {SAUDI_CITIES.map((c) => (
+                    <option key={c.id} value={isAr ? c.nameAr : c.nameEn}>
+                      {isAr ? `${c.nameAr} - ${c.regionNameAr}` : `${c.nameEn} - ${c.regionNameEn}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+                  {isAr ? 'الحي:' : 'District:'}
+                </label>
                 <input
                   type="text"
                   value={district}
                   onChange={(e) => setDistrict(e.target.value)}
                   placeholder={isAr ? 'الحي (مثال: حي النخيل)' : 'District Name'}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Quick District suggestions based on active city */}
+            {(() => {
+              const activeCityObj = SAUDI_CITIES.find(
+                (c) => (isAr ? c.nameAr : c.nameEn) === selectedCity
+              ) || SAUDI_CITIES[0];
+              const distList = isAr ? activeCityObj.districtsAr : activeCityObj.districtsEn;
+
+              return (
+                <div className="space-y-1">
+                  <span className="text-[11px] text-slate-500 font-medium block">
+                    {isAr ? 'أحياء شائعة في هذه المدينة (اختر بنقرة واحدة):' : 'Suggested districts (tap to select):'}
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {distList.map((dName, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setDistrict(dName)}
+                        className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+                          district === dName
+                            ? 'bg-emerald-800 text-white border-emerald-800 font-bold'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {dName}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Customer Contact */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+                  {isAr ? 'اسم المستلم:' : 'Recipient Name:'}
+                </label>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder={isAr ? 'اسم المستلم الثلاثي' : 'Full Name'}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-800"
                   required
                 />
               </div>
               <div>
+                <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+                  {isAr ? 'رقم الجوال السعودي:' : 'Saudi Mobile Number:'}
+                </label>
                 <input
-                  type="text"
-                  value={streetAddress}
-                  onChange={(e) => setStreetAddress(e.target.value)}
-                  placeholder={isAr ? 'الشارع ورقم الفيلا / الشقة' : 'Street & Building No.'}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                  type="tel"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  placeholder="0551234567"
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-800"
                   required
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+                {isAr ? 'العنوان الوطني / الشارع ورقم الفيلا أو الشقة:' : 'National Address / Street & Villa No.:'}
+              </label>
+              <input
+                type="text"
+                value={streetAddress}
+                onChange={(e) => setStreetAddress(e.target.value)}
+                placeholder={isAr ? 'الشارع ورقم الفيلا / الشقة (مثال: شارع التخصصي، مبنى 14)' : 'Street & Building No.'}
+                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                required
+              />
             </div>
 
             <textarea
@@ -382,7 +511,7 @@ export const BookingModal: React.FC = () => {
               onChange={(e) => setNotes(e.target.value)}
               placeholder={isAr ? 'ملاحظات إضافية للفني (نوع الأجهزة، كود بوابة المجمع، أوقات محددة)...' : 'Instructions for provider...'}
               rows={2}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-800"
+              className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-800"
             />
           </div>
 
@@ -394,36 +523,39 @@ export const BookingModal: React.FC = () => {
             </div>
           )}
 
-          {/* Pricing & Proceed CTA */}
-          <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-4 sticky bottom-0 bg-white">
-            <div>
-              <div className="text-xs text-slate-400">
-                {isAr ? 'المجموع شامل ضريبة القيمة المضافة 15%' : 'Total incl. 15% VAT'}
+          {/* Pricing & Proceed CTA - Sticky Bottom on Mobile */}
+          <div className="p-4 -mx-6 -mb-6 mt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky bottom-0 bg-white shadow-[0_-4px_16px_rgba(0,0,0,0.04)] rounded-b-2xl">
+            <div className="flex items-center justify-between sm:block">
+              <div>
+                <div className="text-[11px] text-slate-400">
+                  {isAr ? 'المجموع شامل الضريبة (15% VAT)' : 'Total incl. 15% VAT'}
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xl sm:text-2xl font-black text-slate-950 tabular-nums">
+                    {totalPriceSAR}
+                  </span>
+                  <span className="text-xs sm:text-sm font-bold text-emerald-800">
+                    {isAr ? 'ر.س' : 'SAR'}
+                  </span>
+                  <span className="text-xs text-slate-400">({quantity} {isAr ? 'وحدة' : 'units'})</span>
+                </div>
               </div>
-              <div className="flex items-baseline gap-1">
-                <span className="text-2xl font-black text-slate-950 tabular-nums">
-                  {totalPriceSAR}
-                </span>
-                <span className="text-sm font-bold text-emerald-800">
-                  {isAr ? 'ر.س' : 'SAR'}
-                </span>
-                <span className="text-xs text-slate-400">({quantity} {isAr ? 'وحدة' : 'units'})</span>
-              </div>
-              <div className="text-[11px] text-amber-700 font-semibold flex items-center gap-1 mt-0.5">
+
+              <div className="text-[11px] text-amber-700 font-semibold flex items-center gap-1 sm:mt-0.5">
                 <span>⭐</span>
                 <span>
                   {isAr
-                    ? `ستكسب +${Math.round(totalPriceSAR * loyaltyProfile.earningMultiplier)} نقطة مُتقَن`
-                    : `Earn +${Math.round(totalPriceSAR * loyaltyProfile.earningMultiplier)} Mutqin Points`}
+                    ? `+${Math.round(totalPriceSAR * loyaltyProfile.earningMultiplier)} نقطة`
+                    : `+${Math.round(totalPriceSAR * loyaltyProfile.earningMultiplier)} pts`}
                 </span>
               </div>
             </div>
 
             <button
               type="submit"
-              className="px-6 py-2.5 text-sm font-bold text-white bg-emerald-800 hover:bg-emerald-900 rounded-xl transition-colors shadow-xs flex items-center gap-2"
+              className="w-full sm:w-auto px-6 py-3 text-xs sm:text-sm font-bold text-white bg-emerald-800 hover:bg-emerald-900 rounded-xl transition-colors shadow-xs flex items-center justify-center gap-2 active:scale-98"
             >
-              <span>{isAr ? 'متابعة للدفع وتأكيد الحجز' : 'Proceed to Payment'}</span>
+              <span>{isAr ? 'المتابعة للدفع وتأكيد الحجز' : 'Proceed to Payment'}</span>
               <ArrowIcon className="w-4 h-4" />
             </button>
           </div>

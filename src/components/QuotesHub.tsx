@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useMarketplace } from '../context/MarketplaceContext';
 import { ServiceCategory } from '../types';
-import { PlusCircle, FileText, CheckCircle2, Star, Clock, Send, ShieldAlert, Award } from 'lucide-react';
+import { SAUDI_CITIES } from '../data/mockData';
+import { PlusCircle, FileText, CheckCircle2, Star, Clock, Send, ShieldAlert, Award, MapPin } from 'lucide-react';
 
 export const QuotesHub: React.FC = () => {
   const {
@@ -21,6 +22,7 @@ export const QuotesHub: React.FC = () => {
   const [newDesc, setNewDesc] = useState('');
   const [newCategory, setNewCategory] = useState<ServiceCategory>('ac');
   const [newBudget, setNewBudget] = useState('500 - 900 SAR');
+  const [quoteCity, setQuoteCity] = useState(selectedCity);
   const [newDistrict, setNewDistrict] = useState(isAr ? 'حي الياسمين' : 'Al Yasmin');
 
   // Technician Bidding Drawer State
@@ -39,7 +41,7 @@ export const QuotesHub: React.FC = () => {
       title: newTitle,
       description: newDesc,
       category: newCategory,
-      city: selectedCity,
+      city: quoteCity,
       district: newDistrict,
       budgetRangeSAR: newBudget,
       status: 'open',
@@ -69,27 +71,27 @@ export const QuotesHub: React.FC = () => {
   };
 
   return (
-    <div className="py-10 bg-slate-50 min-h-[70vh]">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+    <div className="py-8 sm:py-10 bg-slate-50 min-h-[70vh]">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 sm:space-y-8">
         {/* Header & Post CTA */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="text-xs font-semibold text-emerald-800 tracking-wider uppercase mb-1">
-              {isAr ? 'سوق المناقصات والتسعير التنافسي' : 'QUOTE BIDDING MARKETPLACE'}
+              {isAr ? 'سوق المناقصات والتسعير التنافسي في المملكة' : 'SAUDI QUOTE BIDDING MARKETPLACE'}
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
               {isAr ? 'عروض أسعار المشاريع المنزلية' : 'Competitive Contractor Bidding'}
             </h2>
             <p className="text-sm text-slate-500 mt-1">
               {isAr
-                ? 'اطرح مشروعك أو صيانة فيلتك واستقبل عروضاً مفصلة من فنيين وشركات معتمدة.'
-                : 'Post custom project specs and receive competitive line-item bids from verified contractors.'}
+                ? 'اطرح مشروعك أو صيانة منزلك في أي مدينة بالمملكة واستقبل عروضاً مفصلة من مقاولين وفنيين مرخصين.'
+                : 'Post custom project specs across all Saudi cities and receive competitive bids from verified contractors.'}
             </p>
           </div>
 
           <button
             onClick={() => setIsPostingNew(!isPostingNew)}
-            className="px-4 py-2 text-xs font-bold text-white bg-emerald-800 hover:bg-emerald-900 rounded-xl transition-colors flex items-center gap-2 self-start sm:self-auto shadow-xs"
+            className="px-4 py-2 text-xs font-bold text-white bg-emerald-800 hover:bg-emerald-900 rounded-xl transition-colors flex items-center gap-2 self-start sm:self-auto shadow-xs active:scale-95"
           >
             <PlusCircle className="w-4 h-4" />
             <span>{isPostingNew ? (isAr ? 'إلغاء النموذج' : 'Cancel') : (isAr ? 'طلب تسعير جديد' : 'Request a Quote')}</span>
@@ -100,7 +102,7 @@ export const QuotesHub: React.FC = () => {
         {isPostingNew && (
           <form
             onSubmit={handlePostQuote}
-            className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-4"
+            className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-4"
           >
             <h3 className="text-base font-bold text-slate-900">
               {isAr ? 'تفاصيل طلب التسعير الجديد' : 'New Project Specifications'}
@@ -138,18 +140,22 @@ export const QuotesHub: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
-                  {isAr ? 'الميزانية المتوقعة (ر.س)' : 'Expected Budget Range'}
+                  {isAr ? 'المدينة (كافة مناطق المملكة)' : 'City (All Regions)'}
                 </label>
-                <input
-                  type="text"
-                  value={newBudget}
-                  onChange={(e) => setNewBudget(e.target.value)}
-                  placeholder="500 - 1,000 SAR"
+                <select
+                  value={quoteCity}
+                  onChange={(e) => setQuoteCity(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-800"
-                />
+                >
+                  {SAUDI_CITIES.map((c) => (
+                    <option key={c.id} value={isAr ? c.nameAr : c.nameEn}>
+                      {isAr ? `${c.nameAr} (${c.regionNameAr})` : `${c.nameEn} (${c.regionNameEn})`}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -161,6 +167,19 @@ export const QuotesHub: React.FC = () => {
                   value={newDistrict}
                   onChange={(e) => setNewDistrict(e.target.value)}
                   placeholder={isAr ? 'حي الياسمين' : 'Al Yasmin'}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  {isAr ? 'الميزانية المتوقعة (ر.س)' : 'Expected Budget Range'}
+                </label>
+                <input
+                  type="text"
+                  value={newBudget}
+                  onChange={(e) => setNewBudget(e.target.value)}
+                  placeholder="500 - 1,000 SAR"
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-800"
                 />
               </div>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useMarketplace } from '../context/MarketplaceContext';
 import { SCIENCE_LAB_IMAGE } from '../data/mockData';
-import { ChemicalSafetyItem } from '../types';
+import { ChemicalSafetyItem, PubchemCompoundResult } from '../types';
 import {
   FlaskConical,
   ShieldCheck,
@@ -21,7 +21,7 @@ export const ScienceSafetyLab: React.FC = () => {
 
   const [selectedChemical, setSelectedChemical] = useState<ChemicalSafetyItem>(chemicalItems[0]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [livePubchemResult, setLivePubchemResult] = useState<any | null>(null);
+  const [livePubchemResult, setLivePubchemResult] = useState<PubchemCompoundResult | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 

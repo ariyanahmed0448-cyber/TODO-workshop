@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMarketplace } from '../context/MarketplaceContext';
-import { SaudiPaymentMethod, Booking, ZatcaInvoice } from '../types';
+import { SaudiPaymentMethod, Booking, ZatcaInvoice, PaymentProcessResponse } from '../types';
 import {
   X,
   ShieldCheck,
@@ -63,7 +63,7 @@ export const PaymentModal: React.FC = () => {
 
     setIsProcessing(true);
 
-    let resData: any = null;
+    let resData: PaymentProcessResponse | null = null;
     try {
       const response = await fetch('/api/payment/process', {
         method: 'POST',
@@ -78,9 +78,9 @@ export const PaymentModal: React.FC = () => {
       });
 
       if (response.ok) {
-        resData = await response.json();
+        resData = (await response.json()) as PaymentProcessResponse;
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.warn('Payment API unavailable, proceeding with local ZATCA compliance simulation:', err);
     } finally {
       setIsProcessing(false);
@@ -108,11 +108,17 @@ export const PaymentModal: React.FC = () => {
       serviceId: pendingBookingData.serviceId || 'srv-ac-deep',
       serviceTitleEn: pendingBookingData.serviceTitleEn || 'Maintenance Service',
       serviceTitleAr: pendingBookingData.serviceTitleAr || 'خدمة صيانة',
-      status: 'confirmed',
+      status: (pendingBookingData.status as Booking['status']) || 'pending',
       date: pendingBookingData.date || '2026-10-15',
       timeSlot: pendingBookingData.timeSlot || '16:00 - 18:00',
       addressCity: pendingBookingData.addressCity || 'الرياض',
       addressDistrict: pendingBookingData.addressDistrict || 'حي النخيل',
+      streetAddress: pendingBookingData.streetAddress,
+      latitude: pendingBookingData.latitude,
+      longitude: pendingBookingData.longitude,
+      locationAccuracyMeters: pendingBookingData.locationAccuracyMeters,
+      nationalAddressCode: pendingBookingData.nationalAddressCode,
+      locationDetectedViaGps: pendingBookingData.locationDetectedViaGps,
       notes: pendingBookingData.notes,
       totalSAR: netTotalSAR,
       paymentMethod: selectedMethod,

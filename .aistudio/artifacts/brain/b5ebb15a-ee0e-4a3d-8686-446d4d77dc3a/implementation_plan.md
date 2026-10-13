@@ -1,31 +1,22 @@
-# Mutqin (مُتقَن) — Instant Live Preview, Slot Scheduling & Mutqin Points Loyalty System
+# Mutqin Care Pass: Recurring Home Maintenance Subscriptions
 
-A comprehensive upgrade plan for the Mutqin Saudi service marketplace to resolve the live preview blank screen by binding Vite directly to port 3000, alongside delivering the complete time-slot booking system, technician schedule management, dispatch notifications, and the Mutqin Points customer loyalty rewards program.
+A comprehensive recurring service subscription platform for regular home maintenance across Saudi Arabia (weekly, bi-weekly, monthly) featuring automated visit scheduling, flexible visit rescheduling/skipping, recurring billing integration (Mada, Apple Pay, STC Pay, and Wallet auto-debit), and ZATCA Phase-2 compliant recurring tax invoices.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The following decisions incorporate the user's confirmed choices from Phase 1 clarification:
-
-- **Instant Live Preview Fix**: Switch the dev server configuration to run Vite directly (`vite --port 3000 --host 0.0.0.0`) with custom lightweight dev middleware or proxy for API endpoints. This immediately resolves the blank preview screen caused by port mismatch (`PORT=8080` in backend vs. port 3000 required by preview iframe).
-- **Time Slot & Scheduling System**:
-  - Customers can pick specific morning, afternoon, and evening booking slots with real-time capacity and prayer-time buffer checks.
-  - Service providers have full control in the Technician Portal to configure daily availability, block specific dates/holidays, set maximum jobs per slot, and toggle emergency callouts.
-- **Dispatch Notifications**:
-  - Real-time notification toasts and in-app Notification Center for booking creations, confirmations, reschedules, and technician arrival updates.
-- **Mutqin Points (نقاط مُتقَن) Loyalty Program**:
-  - Customers earn loyalty points on every completed booking based on spend (1 SAR = 1 Point, with tier multipliers: Silver 1.0x, Gold 1.25x, Platinum 1.5x).
-  - Points can be redeemed as instant SAR cash discounts directly in the payment checkout (10 Points = 1 SAR discount) or converted into voucher codes in the dedicated Loyalty Rewards Hub.
+> The following requirements and architecture have been confirmed through user clarification:
+> - **Subscription Plans**: Full support for all tiers—cadence-based packages (weekly, bi-weekly, monthly), property-tailored bundles (Apartment, Villa, Luxury Palace), and a dedicated "Mutqin Care Pass" membership with recurring discounts and loyalty point multipliers.
+> - **Recurring Billing Modes**: Multi-method recurring billing engine supporting automated Mada/credit card auto-debit simulation, digital wallet balance auto-deduction with low-balance alerts, and a pay-per-visit upon technician dispatch model. Every billing cycle generates a compliant ZATCA Phase-2 recurring tax invoice.
+> - **Automated Scheduling Flexibility**: Fully automated recurring schedule generator that projects upcoming visits, paired with one-tap skip, date/time slot rescheduling, dedicated technician locking, and calendar export (ICS / Google Calendar).
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **What It Does**: Enables instant live rendering of the bilingual Mutqin marketplace in the AI Studio preview window, while equipping homeowners with a precision time-slot booking flow and a rewarding loyalty points system. Technicians gain schedule management tools and dispatch notifications to organize their daily workload across Saudi cities.
-- **Target Audience / Persona**:
-  - *Homeowners & Tenants*: Users booking AC maintenance, plumbing, electrical, and deep cleaning services who want flexible appointment scheduling and reward discounts on repeat visits.
-  - *Technicians & Service Providers*: Saudi contractors managing daily service routes, buffer times, and dispatch notifications.
-- **Key Value**: Immediate application preview visibility, predictable booking slots without scheduling conflicts, and long-term customer retention through Mutqin Points.
+- **What It Does**: Empowers Saudi homeowners, tenants, and property managers to automate their recurring residential maintenance needs—including AC filter & coil cleaning, deep domestic cleaning, plumbing sanitization, electrical inspections, and pest barrier protection. Users select a recurring cadence, property tier, and preferred day/time slot, and Mutqin's automated scheduler creates a rolling timeline of service visits with zero manual rebooking required.
+- **Target Audience / Persona**: Saudi families, villa owners, and working professionals in Riyadh, Jeddah, Dammam, and across all 13 provinces seeking continuous, hassle-free upkeep with vetted technicians and predictable monthly budgeting.
+- **Key Value**: Eliminates repetitive single bookings, guarantees technician availability during peak seasons (such as Saudi summer heatwaves for AC servicing), provides up to 25% cost savings over ad-hoc bookings, and delivers complete control to pause, reschedule, or skip visits at will.
 
 ---
 
@@ -33,97 +24,191 @@ A comprehensive upgrade plan for the Mutqin Saudi service marketplace to resolve
 
 ### Key User Flows
 
-1. **Instant Live Preview Loading**:
-   - The preview window boots directly via Vite on `http://0.0.0.0:3000`, rendering the responsive bilingual marketplace interface without blank screen delays.
-2. **Time Slot Booking Flow**:
-   - Customer selects a service (e.g., Split AC Deep Chemical Cleaning).
-   - In the booking modal, customer selects a date via an interactive calendar and views categorized time slots:
-     - Morning (09:00 - 11:30)
-     - Midday / Dhuhr buffer (12:30 - 14:30)
-     - Afternoon / Asr (16:00 - 18:30)
-     - Evening (19:30 - 22:00)
-   - Real-time indicator displays slot status (Available, Low Availability, or Booked).
-3. **Checkout with Mutqin Points Redemption**:
-   - In the Payment Modal, customers view their current Mutqin Points balance and can check "Redeem Points for Discount".
-   - An interactive slider or 1-click preset applies points (e.g., 500 Points = 50 SAR off), dynamically updating subtotal and ZATCA VAT calculations.
-   - Points earned from the current transaction are prominently highlighted (`+280 نقاط مُتقَن`).
-4. **Technician Schedule Management & Notification Center**:
-   - In the Technician Portal, providers toggle weekly availability (Monday–Sunday), adjust shift hours, block vacation dates, and set slot capacities.
-   - Provider receives real-time dispatch alerts whenever a new booking or reschedule request occurs, with direct action buttons (Accept, En Route, Complete).
-5. **Mutqin Loyalty Hub Modal**:
-   - Accessible via the Navbar points pill (`⭐ 450 نقطة`).
-   - Displays tier status (Silver, Gold, Platinum), lifetime points progress bar, point history ledger, and voucher redemption catalog.
+1. **Discovery & Subscription Catalog (`/subscriptions` or Care Pass Tab)**:
+   - Users browse curated recurring plans categorized by property scale (e.g., *Apartment Essential*, *Villa Comprehensive*, *Palace Executive*) and cadence (Weekly, Bi-Weekly, Monthly).
+   - Dynamic price calculator displays the per-visit cost, monthly total in SAR, savings percentage, and Mutqin Points multiplier.
+2. **Subscription Setup & Automated Slot Selection**:
+   - 3-step setup modal:
+     - **Step 1: Plan & Frequency**: Choose service category, cadence, and property size.
+     - **Step 2: Preferred Schedule & Dispatch City**: Select preferred day of the week (e.g., Every Saturday), time window (Morning 8-12, Afternoon 1-5, Evening 5-9), city/district (with browser GPS location detection pre-filling the National Address), and optional dedicated technician lock.
+     - **Step 3: Billing & Recurring Payment Authorization**: Select payment method (Mada, Apple Pay, STC Pay, or Wallet), preview the recurring billing schedule and VAT breakdown, and authorize the automated subscription.
+3. **Subscriber Management Dashboard**:
+   - Active subscription card showcasing status (`Active`, `Paused`, `Renewing Soon`), next scheduled visit countdown, billing cadence, and accumulated savings.
+   - **Interactive Visit Timeline**: Visual list of upcoming projected visits with status pills (`Scheduled`, `Dispatched`, `Completed`, `Skipped`).
+   - **Visit Actions**: One-tap **"تخطي الزيارة / Skip Visit"** (shifts billing credit to the next cycle) and **"إعادة الجدولة / Reschedule"** (picks an alternative date/time slot).
+   - **Subscription Controls**: Pause subscription, Resume, Change payment method, or Cancel with immediate confirmation toast.
+4. **Recurring Billing & Invoice Hub**:
+   - Access recurring billing history showing monthly transaction receipts, payment statuses, and instant view/download of ZATCA Phase-2 QR e-invoices for each cycle.
 
 ### Visual Identity & Theme
 
-- **Aesthetic Direction**: Vision 2030 modern Saudi digital identity — uncluttered, clean, high-contrast, authoritative.
-- **Color Palette (60-30-10)**:
-  - *60% Canvas*: Off-white `#FBFBFC` (light mode) / Deep slate `#0B1118` (dark mode).
-  - *30% Surfaces*: Crisp white cards with hairline borders (`border-slate-200/80`).
-  - *10% Brand Accents*: Saudi Palm Emerald (`#0D6E4F`), Desert Amber (`#D97706` for Mutqin Points & ratings), and Sapphire Blue (`#2563EB` for Mada payment security).
-- **Typography**: IBM Plex Sans Arabic for Arabic RTL, Plus Jakarta Sans for English LTR, and monospace tabular numerals (`tabular-nums`) for currency and time slots.
-- **Anti-Slop Restraint**: Zero decorative floating pills on static text; clean unboxed metadata with typographic dots (`·`); interactive buttons designed as crisp tactile elements.
+- **Aesthetic Direction**: High-trust, utilitarian luxury tailored for Saudi domestic services. Clean whitespace, crisp hairline borders, deep emerald accents reflecting Saudi identity, and gold accents for premium membership tiers.
+- **Color Palette & Mood**:
+  - Dominant Neutral Canvas (60%): `--background` (`#FBFBFC` light, `#0F172A` dark)
+  - Structural Surfaces (30%): `--card` (`#FFFFFF`), `--border` (`rgba(0, 0, 0, 0.08)` hairline dividers), `--muted` (`#64748B`)
+  - Accent Budget (10%): `--primary` (`#065F46` / `emerald-800`), `--accent` (`#047857` / `emerald-700`), `--highlight` (`#F59E0B` / `amber-500` for VIP Care Pass badges)
+- **Typography & Hierarchy**:
+  - Display Font: `Plus Jakarta Sans` / `IBM Plex Sans Arabic` for authoritative headings.
+  - Body Prose: `Plus Jakarta Sans` / system Arabic sans at 15px with balanced line-height.
+  - Tabular Figures: `tabular-nums` for all SAR prices, VAT calculations, and schedule dates.
+- **Zero-Pill Metadata Discipline**:
+  - Informational metadata (frequencies, visit numbers, invoice codes) rendered with unboxed typographic separators (`·`, `/`).
+  - Active filter controls and cadence selectors styled as segmented tab buttons.
+- **Interactive Feedback & Motion**:
+  - Micro-interactions $\le 150\text{ms}$ on plan selection.
+  - Smooth drawer transitions for visit reschedule modal.
+  - Tactile confirmation checkmarks on subscription creation and visit skip actions.
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Decision 1: Vite Dev Server on Port 3000 for Instant Live Preview**
-  - *Chosen Approach*: Update `package.json` dev script to `vite --port 3000 --host 0.0.0.0` and configure `vite.config.ts` with custom server handlers for `/api/*` routes.
-  - *Why*: The AI Studio preview iframe strictly connects to port 3000. When `tsx server.ts` ran with `process.env.PORT=8080`, the iframe received connection refused or hung on a blank screen. Running Vite on port 3000 restores instant preview functionality.
-- **Decision 2: Integrated Time Slot Availability Engine**
-  - *Chosen Approach*: Maintain synchronized slot availability and technician rules in `MarketplaceContext`, preventing double-booking across concurrent services and factoring in technician day-off dates.
-  - *Why*: Provides immediate client-side validation feedback without waiting for round-trip latency, with graceful fallback to alternative slots.
-- **Decision 3: Transparent Mutqin Points Valuation (10 pts = 1 SAR)**
-  - *Chosen Approach*: Standardize point earnings (1 SAR = 1 point) and redemptions (10 points = 1 SAR) with clear tier multipliers.
-  - *Why*: Intuitive math that builds customer trust and mirrors leading Saudi loyalty ecosystems (e.g., Qitaf, Mokafaa).
+### Decision 1: Client-Side Automated Rolling Schedule Generation vs Static Placeholders
+- **Chosen Approach**: Deterministic schedule generator function (`generateSubscriptionVisits`) that calculates real upcoming dates starting from the subscriber's chosen start date, respecting provider working days, Islamic weekends (Friday/Saturday), and user-selected time slots for the entire subscription term (rolling 4, 8, or 12 visits).
+- **Why**: Delivers instant, realistic schedule projections without requiring external server cron jobs, while allowing interactive mutations (skip, reschedule, dispatch) in real time.
+- **Trade-off**: Requires client-side state reconciliation if the user changes base cadence, handled cleanly through reactive context updates.
+
+### Decision 2: Multi-Modal Recurring Billing Simulation
+- **Chosen Approach**: Full simulation of recurring payment gateways: Mada automated recurring tokenization, Saudi digital wallet deduction with balance alerts, and pay-per-visit on dispatch. Each auto-renewal logs a dedicated transaction in `subscriptionInvoices` and automatically updates the user's Mutqin Points.
+- **Why**: Allows users to test and experience authentic Saudi fintech workflows (Mada debit, STC Pay, Apple Pay) and see accurate ZATCA tax invoice receipts for recurring charges.
+
+### Decision 3: Unified Navigation & Mobile First Ergonomics
+- **Chosen Approach**: Embed "باقات الصيانة الدورية / Subscriptions" directly into the desktop Navbar, Mobile Bottom Navigation bar (as a dedicated view or via the Services dropdown), and Mobile Drawer.
+- **Why**: Ensures effortless mobile access across smartphones throughout Saudi Arabia without exceeding the 15% mobile sticky height cap.
 
 ---
 
 ## 4. Technical Architecture & Data Strategy
 
+### Architecture & Component Diagram
+
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        Mutqin Frontend (Vite)                          │
-│                                                                        │
-│ ┌────────────────────────────────────────────────────────────────────┐ │
-│ │ Navbar: Brand │ Services │ Schedule Hub │ Mutqin Points ⭐ │ Bell 🔔│ │
-│ └────────────────────────────────────────────────────────────────────┘ │
-│ ┌─────────────────┐  ┌──────────────────┐  ┌─────────────────────────┐ │
-│ │ Customer View   │  │ Provider Portal  │  │ Mutqin Loyalty Hub      │ │
-│ │ - Slot Selector │  │ - Day/Slot Hours │  │ - Tier Status & Card    │ │
-│ │ - Points Slider │  │ - Blocked Dates  │  │ - Discount Calculator   │ │
-│ │ - Mada Checkout │  │ - Dispatch Alerts│  │ - Voucher Catalog       │ │
-│ └────────┬────────┘  └────────┬─────────┘  └────────────┬────────────┘ │
-│          │                    │                         │              │
-│ ┌────────┴────────────────────┴─────────────────────────┴────────────┐ │
-│ │ Marketplace Context: Slots, Bookings, Notifications, Loyalty Profile│ │
-│ └─────────────────────────────┬──────────────────────────────────────┘ │
-└───────────────────────────────┼────────────────────────────────────────┘
-                                │ Local State / Vite Dev Middleware (/api/*)
-┌───────────────────────────────▼────────────────────────────────────────┐
-│               Simulated Local Services & Gemini Proxy Engine           │
-│ ┌─────────────────────────┐ ┌──────────────────────┐ ┌───────────────┐ │
-│ │ ZATCA Tax & Invoicing   │ │ PubChem Safety Lab   │ │ Gemini AI Hub │ │
-│ │ - QR Phase 2 Payload    │ │ - Chemical CIDs      │ │ - Chat & Diag │ │
-│ │ - Instant SAR Ledger    │ │ - GHS Classifications│ │ - Estimates   │ │
-│ └─────────────────────────┘ └──────────────────────┘ └───────────────┘ │
-└────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                                 MUTQIN APPLICATION ROOT                                │
+│                                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────────────────────┐  │
+│  │                              MarketplaceContext                                  │  │
+│  │   • activeSubscriptions: UserSubscription[]                                      │  │
+│  │   • subscriptionPlans: SubscriptionPlan[]                                        │  │
+│  │   • subscribeToPlan(planId, options): void                                       │  │
+│  │   • pauseSubscription / resumeSubscription / cancelSubscription                  │  │
+│  │   • rescheduleSubscriptionVisit / skipSubscriptionVisit                          │  │
+│  │   • triggerRecurringBillingCycle(subId): void                                    │  │
+│  └────────────────────────────────────────┬─────────────────────────────────────────┘  │
+│                                           │                                            │
+│            ┌──────────────────────────────┼─────────────────────────────┐              │
+│            ▼                              ▼                             ▼              │
+│  ┌──────────────────┐          ┌──────────────────────┐      ┌──────────────────────┐  │
+│  │ Navbar & Mobile  │          │   SubscriptionsTab   │      │ SubscriptionManager  │  │
+│  │ Navigation Links │          │  (Browse & Purchase) │      │  (Subscriber Portal) │  │
+│  │ • Nav Care Pass  │          │  • Cadence Switcher  │      │  • Active Sub Card   │  │
+│  │ • Mobile Drawer  │          │  • Property Bundles  │      │  • Upcoming Timeline │  │
+│  │ • Quick Actions  │          │  • Savings Breakdown │      │  • Skip/Reschedule   │  │
+│  └──────────────────┘          └──────────┬───────────┘      └──────────┬───────────┘  │
+│                                           │                             │              │
+│                                           ▼                             ▼              │
+│                                ┌──────────────────────┐      ┌──────────────────────┐  │
+│                                │ SubscriptionCheckout │      │ RecurringInvoiceHub  │  │
+│                                │ • 3-Step Setup Modal │      │ • ZATCA QR Invoices  │  │
+│                                │ • GPS National Addr  │      │ • Billing History    │  │
+│                                │ • Payment Gateway    │      │ • Payment Auto-debit │  │
+│                                └──────────────────────┘      └──────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Data Models
+### Data Models (`src/types.ts`)
 
-1. **TimeSlot**: `{ id, labelAr, labelEn, startTime, endTime, period ('morning'|'afternoon'|'evening'), isAvailable, capacity, bookedCount }`
-2. **ProviderSchedule**: `{ dayOfWeek, isWorkingDay, shifts, maxConcurrentJobs, blockedDates }`
-3. **LoyaltyProfile**: `{ currentPoints, lifetimePoints, tier ('Silver'|'Gold'|'Platinum'), earningMultiplier, transactions: LoyaltyTransaction[] }`
-4. **MarketplaceNotification**: `{ id, recipientRole ('customer'|'technician'), type, titleAr, titleEn, messageAr, messageEn, timestamp, read, bookingId }`
+```typescript
+export type SubscriptionCadence = 'weekly' | 'biweekly' | 'monthly';
+export type PropertyType = 'apartment' | 'villa' | 'palace';
+export type SubscriptionStatus = 'active' | 'paused' | 'cancelled' | 'expired';
+export type RecurringPaymentType = 'mada_auto_debit' | 'wallet_auto_deduct' | 'pay_per_visit';
 
----
+export interface SubscriptionPlan {
+  id: string;
+  category: ServiceCategory;
+  nameAr: string;
+  nameEn: string;
+  descriptionAr: string;
+  descriptionEn: string;
+  cadence: SubscriptionCadence;
+  visitsPerMonth: number;
+  propertyType: PropertyType;
+  pricePerVisitSAR: number;
+  monthlyTotalSAR: number;
+  discountPercentage: number;
+  includedFeaturesAr: string[];
+  includedFeaturesEn: string[];
+  popularBadge?: boolean;
+}
 
-## 5. Verification & Delivery Plan
+export interface SubscriptionVisit {
+  id: string;
+  subscriptionId: string;
+  visitNumber: number;
+  scheduledDate: string; // YYYY-MM-DD
+  timeSlot: string;
+  status: 'scheduled' | 'in_progress' | 'completed' | 'skipped' | 'rescheduled';
+  technicianName?: string;
+  notes?: string;
+  completedAt?: string;
+}
 
-1. **Dev Server & Preview Validation**: Configure Vite on port 3000, restart dev server, and verify that the application renders immediately in the preview iframe.
-2. **Booking & Slot Selection Verification**: Test date and time slot selection in `BookingModal`, ensuring booked/full slots cannot be reserved and valid slots proceed to checkout.
-3. **Provider Schedule Controls Verification**: Test updating shift hours and blocking dates in `TechnicianPortal`, ensuring updates reflect dynamically on customer availability.
-4. **Loyalty System Verification**: Verify point accrual upon booking completion, point deduction when redeemed at checkout, and tier progression in `LoyaltyModal`.
-5. **Codebase Linting & Compilation**: Execute `compile_applet` and `lint_applet` to ensure zero compilation or TypeScript errors.
+export interface UserSubscription {
+  id: string;
+  planId: string;
+  planNameAr: string;
+  planNameEn: string;
+  category: ServiceCategory;
+  cadence: SubscriptionCadence;
+  propertyType: PropertyType;
+  status: SubscriptionStatus;
+  startDate: string;
+  nextBillingDate: string;
+  nextVisitDate: string;
+  preferredDayOfWeek: number; // 0=Sun .. 6=Sat
+  preferredTimeSlot: string;
+  addressCity: string;
+  addressDistrict: string;
+  streetAddress?: string;
+  latitude?: number;
+  longitude?: number;
+  monthlyTotalSAR: number;
+  paymentMethod: SaudiPaymentMethod;
+  paymentType: RecurringPaymentType;
+  dedicatedTechnicianId?: string;
+  dedicatedTechnicianName?: string;
+  visits: SubscriptionVisit[];
+  createdAt: string;
+  autoRenew: boolean;
+}
+
+export interface RecurringBillingRecord {
+  id: string;
+  subscriptionId: string;
+  billingDate: string;
+  amountSAR: number;
+  vatAmountSAR: number;
+  paymentMethod: SaudiPaymentMethod;
+  status: 'paid' | 'pending' | 'failed';
+  zatcaInvoiceNo: string;
+  qrCodeSvgData?: string;
+}
+```
+
+### Interactive Component & State Mapping
+
+1. **`SubscriptionPlansCatalog.tsx`**:
+   - Filter tabs for Cadence (`Weekly`, `Bi-Weekly`, `Monthly`) and Property scale (`Apartment`, `Villa`, `Palace`).
+   - Cards display visit counts, price comparison vs single bookings, bulleted perks, and "اشترك الآن / Subscribe" CTA button.
+2. **`SubscriptionCheckoutModal.tsx`**:
+   - Step 1: Confirm plan parameters, add-on requests.
+   - Step 2: Preferred day of week selector, time window slot, integrated `SaudiLocationPicker` to capture GPS & National Address.
+   - Step 3: Payment authorization (Mada, Apple Pay, STC Pay, Wallet), terms acceptance, VAT calculation, and instant activation.
+3. **`SubscriptionDashboard.tsx`**:
+   - Overview metrics: Active plans count, next scheduled visit countdown, total SAR saved, Mutqin points earned.
+   - Interactive upcoming visit timeline with one-tap skip and reschedule modals.
+   - Billing cycle receipt viewer launching `ZatcaInvoiceModal`.
+4. **`App.tsx` & Navigation**:
+   - Add `'subscriptions'` tab to `Navbar.tsx`, `MobileBottomNav.tsx`, and `MobileDrawer.tsx`.
+   - Seamless switching between standard on-demand services and recurring subscriptions.

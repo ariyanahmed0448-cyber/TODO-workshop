@@ -14,12 +14,14 @@ import {
   ExternalLink,
 } from 'lucide-react';
 
+import { GroundingChunkSource } from '../types';
+
 interface ChatMessage {
   id: string;
   role: 'user' | 'model';
   text: string;
   mode?: 'chat' | 'search' | 'thinking' | 'fast';
-  groundingSources?: any[];
+  groundingSources?: GroundingChunkSource[];
 }
 
 export const GeminiAssistantModal: React.FC = () => {
@@ -304,7 +306,7 @@ export const GeminiAssistantModal: React.FC = () => {
                         <span>{isAr ? 'مصادر بحث جوجل الموثوقة:' : 'Google Grounding Citations:'}</span>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
-                        {m.groundingSources.slice(0, 3).map((chunk: any, ci: number) => {
+                        {m.groundingSources.slice(0, 3).map((chunk: GroundingChunkSource, ci: number) => {
                           const title = chunk?.web?.title || 'Google Search Source';
                           const uri = chunk?.web?.uri;
                           if (!uri) return null;

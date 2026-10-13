@@ -55,10 +55,11 @@ function devApiPlugin(): Plugin {
                   messageAr: `تمت عملية الدفع بنجاح بمبلغ ${baseAmount} ر.س`,
                 })
               );
-            } catch (err: any) {
+            } catch (err: unknown) {
               res.statusCode = 500;
               res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ error: err?.message || 'Payment simulation error' }));
+              const message = err instanceof Error ? err.message : 'Payment simulation error';
+              res.end(JSON.stringify({ error: message }));
             }
           });
           return;
@@ -72,7 +73,18 @@ function devApiPlugin(): Plugin {
             const fetchUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(compoundQuery)}/property/MolecularFormula,MolecularWeight,IUPACName,Title,InChIKey/JSON`;
             const pcRes = await fetch(fetchUrl);
             if (pcRes.ok) {
-              const pcData: any = await pcRes.json();
+              const pcData = (await pcRes.json()) as {
+                PropertyTable?: {
+                  Properties?: Array<{
+                    CID?: number;
+                    Title?: string;
+                    MolecularFormula?: string;
+                    MolecularWeight?: string;
+                    IUPACName?: string;
+                    InChIKey?: string;
+                  }>;
+                };
+              };
               if (pcData?.PropertyTable?.Properties?.[0]) {
                 const prop = pcData.PropertyTable.Properties[0];
                 res.setHeader('Content-Type', 'application/json');
@@ -95,9 +107,10 @@ function devApiPlugin(): Plugin {
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ found: false, message: 'Compound not found in PubChem registry' }));
             return;
-          } catch (e: any) {
+          } catch (e: unknown) {
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ found: false, error: e?.message }));
+            const errorMsg = e instanceof Error ? e.message : 'PubChem query failed';
+            res.end(JSON.stringify({ found: false, error: errorMsg }));
             return;
           }
         }
