@@ -3,6 +3,8 @@ import { useMarketplace } from '../context/MarketplaceContext';
 import { Booking, ZatcaInvoice } from '../types';
 import { STANDARD_TIME_SLOTS } from '../data/mockData';
 import { SubscriptionDashboard } from './SubscriptionDashboard';
+import { LiveTrackingMap } from './LiveTrackingMap';
+import { BookingReviewModal } from './BookingReviewModal';
 import {
   Calendar,
   Clock,
@@ -19,6 +21,13 @@ import {
   Building2,
   Repeat,
   Crown,
+  Navigation,
+  Star,
+  Car,
+  ChevronDown,
+  ChevronUp,
+  Maximize2,
+  ThumbsUp,
 } from 'lucide-react';
 
 export const MyBookingsView: React.FC = () => {
@@ -39,12 +48,20 @@ export const MyBookingsView: React.FC = () => {
 
   const isAr = language === 'ar';
 
-  const [viewMode, setViewMode] = useState<'bookings' | 'subscriptions'>('subscriptions');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'completed'>('all');
+  const [viewMode, setViewMode] = useState<'bookings' | 'subscriptions'>('bookings');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'in_progress' | 'pending' | 'confirmed' | 'completed'>('all');
   const [reschedulingBooking, setReschedulingBooking] = useState<Booking | null>(null);
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
   const [newDate, setNewDate] = useState('2026-10-18');
   const [newSlotId, setNewSlotId] = useState(STANDARD_TIME_SLOTS[2].id);
+
+  // Live Tracking & Review states
+  const inProgressBooking = bookings.find((b: Booking) => b.status === 'in_progress');
+  const [expandedTrackingBookingId, setExpandedTrackingBookingId] = useState<string | null>(
+    inProgressBooking ? inProgressBooking.id : null
+  );
+  const [liveTrackModalBooking, setLiveTrackModalBooking] = useState<Booking | null>(null);
+  const [reviewModalBooking, setReviewModalBooking] = useState<Booking | null>(null);
 
   const filteredBookings = bookings.filter((b: Booking) => {
     if (statusFilter === 'all') return true;
@@ -203,9 +220,66 @@ export const MyBookingsView: React.FC = () => {
         {viewMode === 'bookings' && (
           <div className="space-y-6">
 
+        {/* Active En Route Notification Banner */}
+        {inProgressBooking && (
+          <div className="bg-gradient-to-r from-emerald-800 to-teal-900 text-white rounded-2xl p-4 sm:p-5 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4 border border-emerald-700">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center font-bold shrink-0">
+                <Car className="w-6 h-6 text-emerald-300 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/30 text-emerald-200 px-2.5 py-0.5 rounded-full border border-emerald-400/30 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span>{isAr ? 'الفني في الطريق إليك الآن' : 'Technician En Route'}</span>
+                  </span>
+                  <span className="text-xs font-mono text-emerald-200">#{inProgressBooking.id}</span>
+                </div>
+                <p className="text-sm font-bold text-white mt-1">
+                  {isAr ? inProgressBooking.serviceTitleAr : inProgressBooking.serviceTitleEn} — {inProgressBooking.technicianName}
+                </p>
+                <p className="text-xs text-emerald-200/90 mt-0.5">
+                  {isAr
+                    ? 'يمكنك متابعة تحركات الفني ولحظة وصوله مباشرة على الخريطة التفاعلية.'
+                    : 'Track live technician telemetry and arrival estimate directly on the map.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-center">
+              <button
+                onClick={() => {
+                  setStatusFilter('all');
+                  setExpandedTrackingBookingId(
+                    expandedTrackingBookingId === inProgressBooking.id ? null : inProgressBooking.id
+                  );
+                }}
+                className="px-4 py-2 text-xs font-bold bg-white text-emerald-950 hover:bg-emerald-50 rounded-xl transition-all shadow-xs flex items-center gap-1.5"
+              >
+                <Navigation className="w-3.5 h-3.5 text-emerald-800" />
+                <span>
+                  {expandedTrackingBookingId === inProgressBooking.id
+                    ? isAr
+                      ? 'إخفاء الخريطة'
+                      : 'Hide Map'
+                    : isAr
+                    ? 'عرض خريطة التتبع'
+                    : 'Show Live Map'}
+                </span>
+              </button>
+              <button
+                onClick={() => setLiveTrackModalBooking(inProgressBooking)}
+                className="p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition-colors"
+                title={isAr ? 'تكبير الخريطة' : 'Fullscreen Map'}
+              >
+                <Maximize2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Status Filter Tabs */}
         {bookings.length > 0 && (
-          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl p-1.5 self-start">
+          <div className="flex flex-wrap items-center gap-1.5 bg-white border border-slate-200 rounded-xl p-1.5 self-start">
             <button
               onClick={() => setStatusFilter('all')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
@@ -215,6 +289,22 @@ export const MyBookingsView: React.FC = () => {
               }`}
             >
               {isAr ? 'جميع الحجوزات' : 'All Bookings'} ({bookings.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('in_progress')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
+                statusFilter === 'in_progress'
+                  ? 'bg-emerald-700 text-white'
+                  : 'text-emerald-800 hover:text-emerald-950 bg-emerald-50'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+              <span>{isAr ? 'الفني في الطريق' : 'En Route'}</span>
+              {bookings.filter((b) => b.status === 'in_progress').length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white text-emerald-900 font-bold">
+                  {bookings.filter((b) => b.status === 'in_progress').length}
+                </span>
+              )}
             </button>
             <button
               onClick={() => setStatusFilter('pending')}
@@ -249,7 +339,7 @@ export const MyBookingsView: React.FC = () => {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              {isAr ? 'مكتملة' : 'Completed'}
+              {isAr ? 'مكتملة ومقيّمة' : 'Completed'}
             </button>
           </div>
         )}
@@ -279,176 +369,336 @@ export const MyBookingsView: React.FC = () => {
               return (
                 <div
                   key={booking.id}
-                  className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-slate-300 transition-all"
+                  className={`rounded-2xl border transition-all overflow-hidden ${
+                    booking.status === 'in_progress'
+                      ? 'bg-white border-emerald-400 ring-2 ring-emerald-500/20 shadow-sm'
+                      : 'bg-white border-slate-200 shadow-xs hover:border-slate-300'
+                  }`}
                 >
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-slate-400">
-                        #{booking.id}
-                      </span>
-                      <span
-                        className={`text-xs font-bold px-2.5 py-0.5 rounded-md ${
-                          booking.status === 'completed'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : booking.status === 'in_progress'
-                            ? 'bg-indigo-100 text-indigo-800'
-                            : booking.status === 'confirmed'
-                            ? 'bg-blue-100 text-blue-800'
-                            : booking.status === 'cancelled'
-                            ? 'bg-rose-100 text-rose-800'
-                            : 'bg-amber-100 text-amber-900 border border-amber-300'
-                        }`}
-                      >
-                        {booking.status === 'completed'
-                          ? isAr
-                            ? 'مكتمل ومسدد'
-                            : 'Completed'
-                          : booking.status === 'in_progress'
-                          ? isAr
-                            ? 'الفني في الطريق'
-                            : 'In Progress'
-                          : booking.status === 'confirmed'
-                          ? isAr
-                            ? 'مؤكد ومجدول'
-                            : 'Confirmed'
-                          : booking.status === 'cancelled'
-                          ? isAr
-                            ? 'ملغي'
-                            : 'Cancelled'
-                          : isAr
-                          ? 'قيد الانتظار والقبول ⏳'
-                          : 'Pending Acceptance ⏳'}
-                      </span>
-                      <span className="text-xs text-slate-400 font-mono">
-                        {booking.paymentMethod.toUpperCase()} (مدفوع)
-                      </span>
-                    </div>
-
-                    <h3 className="text-lg font-bold text-slate-900">{title}</h3>
-
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-                      <span className="flex items-center gap-1 font-semibold text-slate-800">
-                        <Calendar className="w-3.5 h-3.5 text-emerald-800" />
-                        <span>{booking.date}</span>
-                      </span>
-                      <span className="flex items-center gap-1 font-semibold text-slate-800">
-                        <Clock className="w-3.5 h-3.5 text-emerald-800" />
-                        <span>{booking.timeSlot}</span>
-                      </span>
-                      <span className="flex items-center gap-1 font-medium text-slate-700">
-                        <MapPin className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>{booking.addressCity} - {booking.addressDistrict}</span>
-                      </span>
-                      {booking.streetAddress && (
-                        <span className="text-[11px] text-slate-500 font-normal">
-                          ({booking.streetAddress})
+                  <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="space-y-2 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-slate-400">
+                          #{booking.id}
                         </span>
+                        <span
+                          className={`text-xs font-bold px-2.5 py-0.5 rounded-md flex items-center gap-1.5 ${
+                            booking.status === 'completed'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : booking.status === 'in_progress'
+                              ? 'bg-emerald-700 text-white shadow-xs'
+                              : booking.status === 'confirmed'
+                              ? 'bg-blue-100 text-blue-800'
+                              : booking.status === 'cancelled'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-amber-100 text-amber-900 border border-amber-300'
+                          }`}
+                        >
+                          {booking.status === 'in_progress' && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-ping"></span>
+                          )}
+                          <span>
+                            {booking.status === 'completed'
+                              ? isAr
+                                ? 'مكتمل ومسدد'
+                                : 'Completed'
+                              : booking.status === 'in_progress'
+                              ? isAr
+                                ? 'الفني في الطريق إليك (مباشر)'
+                                : 'En Route (Live)'
+                              : booking.status === 'confirmed'
+                              ? isAr
+                                ? 'مؤكد ومجدول'
+                                : 'Confirmed'
+                              : booking.status === 'cancelled'
+                              ? isAr
+                                ? 'ملغي'
+                                : 'Cancelled'
+                              : isAr
+                              ? 'قيد الانتظار والقبول ⏳'
+                              : 'Pending Acceptance ⏳'}
+                          </span>
+                        </span>
+                        <span className="text-xs text-slate-400 font-mono">
+                          {booking.paymentMethod.toUpperCase()} (مدفوع)
+                        </span>
+
+                        {/* Customer Star Rating Badge if already reviewed */}
+                        {booking.status === 'completed' && booking.review && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-100 px-2.5 py-0.5 rounded-md border border-amber-200">
+                            <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                            <span>
+                              {booking.review.rating}/5 {isAr ? 'تقييمك' : 'Your Rating'}
+                            </span>
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+                        <span className="flex items-center gap-1 font-semibold text-slate-800">
+                          <Calendar className="w-3.5 h-3.5 text-emerald-800" />
+                          <span>{booking.date}</span>
+                        </span>
+                        <span className="flex items-center gap-1 font-semibold text-slate-800">
+                          <Clock className="w-3.5 h-3.5 text-emerald-800" />
+                          <span>{booking.timeSlot}</span>
+                        </span>
+                        <span className="flex items-center gap-1 font-medium text-slate-700">
+                          <MapPin className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>{booking.addressCity} - {booking.addressDistrict}</span>
+                        </span>
+                        {booking.streetAddress && (
+                          <span className="text-[11px] text-slate-500 font-normal">
+                            ({booking.streetAddress})
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Geolocation Dispatch & National Address Info */}
+                      {(booking.latitude || booking.nationalAddressCode) && (
+                        <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
+                          {booking.latitude && booking.longitude && (
+                            <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200 font-mono">
+                              <Crosshair className="w-3 h-3 text-emerald-700" />
+                              <span>
+                                {booking.latitude.toFixed(4)}°N, {booking.longitude.toFixed(4)}°E
+                              </span>
+                              {booking.locationDetectedViaGps && (
+                                <span className="text-[10px] text-emerald-800 font-sans font-bold">
+                                  (GPS)
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {booking.nationalAddressCode && (
+                            <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200 font-mono font-semibold">
+                              <Building2 className="w-3 h-3 text-amber-700" />
+                              <span>{booking.nationalAddressCode}</span>
+                            </div>
+                          )}
+                          {booking.latitude && booking.longitude && (
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${booking.latitude},${booking.longitude}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 hover:text-emerald-950 underline underline-offset-2"
+                            >
+                              <span>{isAr ? 'خرائط Google' : 'Google Maps'}</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Live En Route ETA Quick Telemetry Strip */}
+                      {booking.status === 'in_progress' && (
+                        <div className="mt-2 p-2.5 bg-emerald-50/80 rounded-xl border border-emerald-200 flex flex-wrap items-center gap-3 text-xs text-emerald-950 font-medium">
+                          <div className="flex items-center gap-1.5 font-bold">
+                            <Car className="w-4 h-4 text-emerald-700" />
+                            <span>
+                              {isAr ? 'الوقت المتوقع للوصول:' : 'Estimated Arrival:'}{' '}
+                              <span className="text-emerald-900 font-black">
+                                {booking.liveTracking?.etaMinutes || 11} {isAr ? 'دقيقة' : 'mins'}
+                              </span>
+                            </span>
+                          </div>
+                          <span>•</span>
+                          <div className="text-slate-600">
+                            {booking.liveTracking?.distanceKm || 3.4} {isAr ? 'كم متبقية' : 'km remaining'}
+                          </div>
+                          <span>•</span>
+                          <div className="text-slate-600 truncate max-w-xs">
+                            {isAr
+                              ? booking.liveTracking?.currentRoadAr || 'طريق الملك فهد'
+                              : booking.liveTracking?.currentRoadEn || 'King Fahd Rd'}
+                          </div>
+                        </div>
+                      )}
+
+                      {booking.status === 'pending' && (
+                        <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                          {isAr
+                            ? 'حجزك قيد المراجعة لدى الفني المختص، وسيتم إشعارك فور تأكيد الموعد.'
+                            : 'Your appointment is pending technician review. You will be notified once confirmed.'}
+                        </p>
+                      )}
+
+                      {booking.status === 'cancelled' && (
+                        <p className="text-xs text-rose-700 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                          {isAr ? 'تم إلغاء هذا الحجز.' : 'This booking has been cancelled.'}
+                        </p>
+                      )}
+
+                      {booking.technicianName && booking.status !== 'cancelled' && (
+                        <p className="text-xs text-emerald-800 font-medium">
+                          {isAr ? 'الفني المعين:' : 'Assigned Technician:'} {booking.technicianName}
+                        </p>
                       )}
                     </div>
 
-                    {/* Geolocation Dispatch & National Address Info */}
-                    {(booking.latitude || booking.nationalAddressCode) && (
-                      <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
-                        {booking.latitude && booking.longitude && (
-                          <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200 font-mono">
-                            <Crosshair className="w-3 h-3 text-emerald-700" />
-                            <span>
-                              {booking.latitude.toFixed(4)}°N, {booking.longitude.toFixed(4)}°E
-                            </span>
-                            {booking.locationDetectedViaGps && (
-                              <span className="text-[10px] text-emerald-800 font-sans font-bold">
-                                (GPS)
+                    {/* Actions & Price */}
+                    <div className="flex flex-col sm:flex-row md:flex-col items-end gap-3 shrink-0">
+                      <div className="text-right rtl:text-left w-full sm:w-auto">
+                        <div className="text-xs text-slate-400">{isAr ? 'المبلغ المسدد' : 'Paid Amount'}</div>
+                        <div className="text-lg font-black text-slate-900 tabular-nums">
+                          {booking.totalSAR}{' '}
+                          <span className="text-xs font-bold text-emerald-800">
+                            {isAr ? 'ر.س' : 'SAR'}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-amber-700 font-bold flex items-center justify-end rtl:justify-start gap-1">
+                          <span>⭐</span>
+                          <span>+{earnedPts} {isAr ? 'نقطة' : 'pts'}</span>
+                        </div>
+                      </div>
+
+                      {/* Dynamic Action Buttons according to Booking Status */}
+                      <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
+                        {/* 1. Live Tracking Buttons when En Route */}
+                        {booking.status === 'in_progress' && (
+                          <>
+                            <button
+                              onClick={() => {
+                                setExpandedTrackingBookingId(
+                                  expandedTrackingBookingId === booking.id ? null : booking.id
+                                );
+                              }}
+                              className="px-3.5 py-2 text-xs font-bold text-white bg-emerald-800 hover:bg-emerald-900 rounded-xl transition-all flex items-center gap-1.5 shadow-xs"
+                            >
+                              <Navigation className="w-3.5 h-3.5" />
+                              <span>
+                                {expandedTrackingBookingId === booking.id
+                                  ? isAr
+                                    ? 'إغلاق الخريطة'
+                                    : 'Hide Map'
+                                  : isAr
+                                  ? 'تتبع الفني المباشر'
+                                  : 'Live Track'}
                               </span>
-                            )}
-                          </div>
+                              {expandedTrackingBookingId === booking.id ? (
+                                <ChevronUp className="w-3 h-3" />
+                              ) : (
+                                <ChevronDown className="w-3 h-3" />
+                              )}
+                            </button>
+
+                            <button
+                              onClick={() => setLiveTrackModalBooking(booking)}
+                              className="p-2 text-slate-700 hover:text-emerald-900 bg-slate-100 hover:bg-emerald-50 rounded-xl transition-colors border border-slate-200"
+                              title={isAr ? 'تكبير الخريطة في نافذة مستقلة' : 'Fullscreen Map'}
+                            >
+                              <Maximize2 className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                updateBookingStatus(booking.id, 'completed');
+                                setReviewModalBooking({ ...booking, status: 'completed' });
+                              }}
+                              className="px-3 py-2 text-xs font-semibold text-emerald-900 bg-emerald-100 hover:bg-emerald-200 rounded-xl transition-colors border border-emerald-300 flex items-center gap-1"
+                              title={isAr ? 'محاكاة وصول الفني وإتمام الصيانة' : 'Simulate Arrival'}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                              <span>{isAr ? 'وصل الفني' : 'Arrived'}</span>
+                            </button>
+                          </>
                         )}
-                        {booking.nationalAddressCode && (
-                          <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200 font-mono font-semibold">
-                            <Building2 className="w-3 h-3 text-amber-700" />
-                            <span>{booking.nationalAddressCode}</span>
-                          </div>
-                        )}
-                        {booking.latitude && booking.longitude && (
-                          <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${booking.latitude},${booking.longitude}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 hover:text-emerald-950 underline underline-offset-2"
+
+                        {/* 2. Dispatch Simulation for Confirmed Bookings */}
+                        {booking.status === 'confirmed' && (
+                          <button
+                            onClick={() => {
+                              updateBookingStatus(booking.id, 'in_progress');
+                              setExpandedTrackingBookingId(booking.id);
+                            }}
+                            className="px-3.5 py-2 text-xs font-bold text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
                           >
-                            <span>{isAr ? 'خرائط Google' : 'Google Maps'}</span>
-                            <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
+                            <Car className="w-3.5 h-3.5 text-blue-700" />
+                            <span>{isAr ? 'محاكاة خروج الفني (تتبع مباشر)' : 'Simulate En Route'}</span>
+                          </button>
                         )}
-                      </div>
-                    )}
 
-                    {booking.status === 'pending' && (
-                      <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
-                        {isAr
-                          ? 'حجزك قيد المراجعة لدى الفني المختص، وسيتم إشعارك فور تأكيد الموعد.'
-                          : 'Your appointment is pending technician review. You will be notified once confirmed.'}
-                      </p>
-                    )}
+                        {/* 3. Star Rating & Customer Review System for Completed Bookings */}
+                        {booking.status === 'completed' && (
+                          <button
+                            onClick={() => setReviewModalBooking(booking)}
+                            className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs ${
+                              booking.review
+                                ? 'text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-300'
+                                : 'text-white bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 ring-2 ring-amber-400/40'
+                            }`}
+                          >
+                            <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-200" />
+                            <span>
+                              {booking.review
+                                ? isAr
+                                  ? 'عرض تقييمك'
+                                  : 'View Your Review'
+                                : isAr
+                                ? 'قيّم الفني والخدمة (+25 نقطة)'
+                                : 'Rate & Review (+25 pts)'}
+                            </span>
+                          </button>
+                        )}
 
-                    {booking.status === 'cancelled' && (
-                      <p className="text-xs text-rose-700 bg-rose-50 p-2 rounded-lg border border-rose-200">
-                        {isAr ? 'تم إلغاء هذا الحجز.' : 'This booking has been cancelled.'}
-                      </p>
-                    )}
+                        {/* Standard Reschedule & Invoice Actions */}
+                        {canReschedule && (
+                          <button
+                            onClick={() => {
+                              setReschedulingBooking(booking);
+                              setRescheduleError(null);
+                            }}
+                            className="px-3 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors flex items-center gap-1.5"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                            <span>{isAr ? 'إعادة جدولة' : 'Reschedule'}</span>
+                          </button>
+                        )}
 
-                    {booking.technicianName && booking.status !== 'cancelled' && (
-                      <p className="text-xs text-emerald-800 font-medium">
-                        {isAr ? 'الفني المعين:' : 'Assigned Technician:'} {booking.technicianName}
-                      </p>
-                    )}
-                  </div>
+                        {booking.status === 'pending' && (
+                          <button
+                            onClick={() => updateBookingStatus(booking.id, 'cancelled')}
+                            className="px-3 py-2 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors"
+                          >
+                            {isAr ? 'إلغاء الحجز' : 'Cancel'}
+                          </button>
+                        )}
 
-                  {/* Actions & Price */}
-                  <div className="flex items-center gap-3 self-end md:self-center shrink-0">
-                    <div className="text-right rtl:text-left mr-2 rtl:mr-0 rtl:ml-2">
-                      <div className="text-xs text-slate-400">{isAr ? 'المبلغ المسدد' : 'Paid Amount'}</div>
-                      <div className="text-lg font-black text-slate-900 tabular-nums">
-                        {booking.totalSAR}{' '}
-                        <span className="text-xs font-bold text-emerald-800">
-                          {isAr ? 'ر.س' : 'SAR'}
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-amber-700 font-bold flex items-center justify-end rtl:justify-start gap-1">
-                        <span>⭐</span>
-                        <span>+{earnedPts} {isAr ? 'نقطة' : 'pts'}</span>
+                        <button
+                          onClick={() => handleViewInvoice(booking)}
+                          className="px-3 py-2 text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-colors flex items-center gap-1.5"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-emerald-800" />
+                          <span>{isAr ? 'فاتورة ZATCA' : 'Tax Invoice'}</span>
+                        </button>
                       </div>
                     </div>
-
-                    {canReschedule && (
-                      <button
-                        onClick={() => {
-                          setReschedulingBooking(booking);
-                          setRescheduleError(null);
-                        }}
-                        className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors flex items-center gap-1.5"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-                        <span>{isAr ? 'إعادة جدولة' : 'Reschedule'}</span>
-                      </button>
-                    )}
-
-                    {booking.status === 'pending' && (
-                      <button
-                        onClick={() => updateBookingStatus(booking.id, 'cancelled')}
-                        className="px-3 py-2 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors"
-                      >
-                        {isAr ? 'إلغاء الحجز' : 'Cancel'}
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => handleViewInvoice(booking)}
-                      className="px-3.5 py-2 text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-colors flex items-center gap-1.5"
-                    >
-                      <FileText className="w-3.5 h-3.5 text-emerald-800" />
-                      <span>{isAr ? 'فاتورة ZATCA' : 'Tax Invoice'}</span>
-                    </button>
                   </div>
+
+                  {/* Inline Live Tracking Map Component Drawer */}
+                  {booking.status === 'in_progress' && expandedTrackingBookingId === booking.id && (
+                    <div className="border-t border-slate-200 bg-slate-50 p-4 sm:p-6 animate-fadeIn">
+                      <div className="flex items-center justify-between pb-3">
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                          <Navigation className="w-4 h-4 text-emerald-800" />
+                          <span>{isAr ? 'خريطة التتبع المباشر للفني' : 'Live Real-time Technician Tracking'}</span>
+                        </div>
+                        <button
+                          onClick={() => setLiveTrackModalBooking(booking)}
+                          className="text-xs text-emerald-800 hover:text-emerald-950 font-semibold flex items-center gap-1"
+                        >
+                          <Maximize2 className="w-3.5 h-3.5" />
+                          <span>{isAr ? 'تكبير الخريطة' : 'Expand Fullscreen'}</span>
+                        </button>
+                      </div>
+                      <LiveTrackingMap
+                        booking={booking}
+                        onOpenReviewModal={(b) => setReviewModalBooking(b)}
+                      />
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -538,6 +788,30 @@ export const MyBookingsView: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Fullscreen Live Tracking Map Modal */}
+      {liveTrackModalBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs overflow-y-auto">
+          <LiveTrackingMap
+            booking={liveTrackModalBooking}
+            isModal={true}
+            onClose={() => setLiveTrackModalBooking(null)}
+            onOpenReviewModal={(b) => {
+              setLiveTrackModalBooking(null);
+              setReviewModalBooking(b);
+            }}
+          />
+        </div>
+      )}
+
+      {/* Customer Star Rating & Review Modal */}
+      {reviewModalBooking && (
+        <BookingReviewModal
+          booking={reviewModalBooking}
+          isOpen={!!reviewModalBooking}
+          onClose={() => setReviewModalBooking(null)}
+        />
       )}
     </div>
   );

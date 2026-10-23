@@ -19,6 +19,8 @@ import {
   SubscriptionBillingCycle,
   SubscriptionBillingMethod,
   SubscriptionBillingInvoiceItem,
+  ServiceReview,
+  LiveTrackingTelemetry,
 } from '../types';
 import {
   INITIAL_SERVICES,
@@ -61,6 +63,12 @@ interface MarketplaceContextType {
   createBooking: (booking: Booking, invoice: ZatcaInvoice, pointsRedeemed?: number) => void;
   updateBookingStatus: (bookingId: string, status: Booking['status']) => void;
   rescheduleBooking: (bookingId: string, newDate: string, newTimeSlot: string) => void;
+  submitBookingReview: (bookingId: string, review: Omit<ServiceReview, 'id' | 'createdAt'>) => void;
+  updateBookingLiveTracking: (bookingId: string, telemetry: Partial<LiveTrackingTelemetry>) => void;
+  selectedBookingForLiveTrack: Booking | null;
+  setSelectedBookingForLiveTrack: (booking: Booking | null) => void;
+  selectedBookingForReview: Booking | null;
+  setSelectedBookingForReview: (booking: Booking | null) => void;
   createQuote: (quote: Omit<Quote, 'id' | 'bids' | 'createdAt'>) => void;
   submitBid: (quoteId: string, bid: Omit<QuoteBid, 'id' | 'submittedAt'>) => void;
   awardBid: (quoteId: string, bidId: string) => void;
@@ -178,6 +186,10 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCoverageModalOpen, setIsCoverageModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Live Tracking and Review modal state
+  const [selectedBookingForLiveTrack, setSelectedBookingForLiveTrack] = useState<Booking | null>(null);
+  const [selectedBookingForReview, setSelectedBookingForReview] = useState<Booking | null>(null);
 
   // Notifications State
   const [notifications, setNotifications] = useState<MarketplaceNotification[]>(() => {
@@ -570,7 +582,32 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const updateBookingStatus = (bookingId: string, status: Booking['status']) => {
     setBookings((prev) =>
-      prev.map((b) => (b.id === bookingId ? { ...b, status } : b))
+      prev.map((b) => {
+        if (b.id !== bookingId) return b;
+        let tracking = b.liveTracking;
+        if (status === 'in_progress' && !tracking) {
+          const destLat = b.latitude || 24.8192;
+          const destLng = b.longitude || 46.6621;
+          tracking = {
+            technicianLat: destLat - 0.015,
+            technicianLng: destLng - 0.012,
+            etaMinutes: 14,
+            distanceKm: 4.2,
+            currentRoadAr: 'طريق الملك فهد متجهاً إلى موقع العميل',
+            currentRoadEn: 'King Fahd Road heading towards client location',
+            speedKmh: 45,
+            vehicleModelAr: 'تويوتا هايس - فان صيانة متكامل ومجهز',
+            vehicleModelEn: 'Toyota HiAce - Fully Equipped Service Van',
+            plateNumberAr: 'أ ب ج ١ ٩ ٨ ٢',
+            plateNumberEn: 'ABJ 1982',
+            technicianPhone: b.technicianPhone || '+966 50 123 4567',
+            routeProgressPercent: 20,
+            milestone: 'en_route',
+            lastUpdatedTime: 'الآن',
+          };
+        }
+        return { ...b, status, liveTracking: tracking };
+      })
     );
 
     const targetBooking = bookings.find((b) => b.id === bookingId);
@@ -605,9 +642,9 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
         status === 'confirmed'
           ? `وافق الفني على موعد حجز ${serviceName} وتأكدت الزيارة في الموعد المحدد.`
           : status === 'in_progress'
-          ? `الفني في طريقه لموقعك لبدء خدمة ${serviceName}.`
+          ? `الفني في طريقه لموقعك لبدء خدمة ${serviceName}. يمكنك تتبع موقعه لحظياً عبر الخريطة.`
           : status === 'completed'
-          ? `تم الانتهاء من تنفيذ ${serviceName}، وتم توثيق الضمان لمدة 30 يوماً.`
+          ? `تم الانتهاء من تنفيذ ${serviceName}، يمكنك الآن تقييم الفني وكتابة تجربتك.`
           : status === 'cancelled'
           ? `تم إلغاء الموعد #${bookingId} لخدمة ${serviceName}.`
           : `تم تحديث الموعد #${bookingId} إلى: ${status}`,
@@ -615,9 +652,9 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
         status === 'confirmed'
           ? `Technician has accepted your booking for ${serviceNameEn}. Visit confirmed.`
           : status === 'in_progress'
-          ? `Technician is en route to your address for ${serviceNameEn}.`
+          ? `Technician is en route to your address for ${serviceNameEn}. Track live on map.`
           : status === 'completed'
-          ? `Service ${serviceNameEn} completed with 30-day warranty active.`
+          ? `Service ${serviceNameEn} completed. Please rate the technician and share your review.`
           : status === 'cancelled'
           ? `Booking #${bookingId} for ${serviceNameEn} has been cancelled.`
           : `Booking #${bookingId} status is now ${status}.`,
@@ -631,7 +668,7 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const statusLabelsAr: Record<string, string> = {
       pending: 'قيد الانتظار',
       confirmed: 'مؤكد',
-      in_progress: 'قيد التنفيذ',
+      in_progress: 'الفني في الطريق',
       completed: 'مكتمل',
       cancelled: 'ملغي',
     };
@@ -640,6 +677,103 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
       language === 'ar'
         ? `تم تحديث حالة الحجز إلى: ${statusLabelsAr[status] || status}`
         : `Booking status updated to: ${status}`
+    );
+  };
+
+  const updateBookingLiveTracking = (bookingId: string, telemetry: Partial<LiveTrackingTelemetry>) => {
+    setBookings((prev) =>
+      prev.map((b) => {
+        if (b.id !== bookingId) return b;
+        const currentTracking = b.liveTracking || {
+          technicianLat: (b.latitude || 24.8192) - 0.015,
+          technicianLng: (b.longitude || 46.6621) - 0.012,
+          etaMinutes: 12,
+          distanceKm: 3.5,
+          currentRoadAr: 'طريق الملك فهد متجهاً إلى موقع العميل',
+          currentRoadEn: 'King Fahd Road heading towards client location',
+          speedKmh: 45,
+          vehicleModelAr: 'تويوتا هايس - فان صيانة متكامل ومجهز',
+          vehicleModelEn: 'Toyota HiAce - Service Van',
+          plateNumberAr: 'أ ب ج ١ ٩ ٨ ٢',
+          plateNumberEn: 'ABJ 1982',
+          technicianPhone: b.technicianPhone || '+966 50 123 4567',
+          routeProgressPercent: 50,
+          milestone: 'en_route',
+          lastUpdatedTime: 'الآن',
+        };
+        const updatedTracking = { ...currentTracking, ...telemetry, lastUpdatedTime: 'الآن' };
+        return { ...b, liveTracking: updatedTracking };
+      })
+    );
+  };
+
+  const submitBookingReview = (
+    bookingId: string,
+    reviewData: Omit<ServiceReview, 'id' | 'createdAt'>
+  ) => {
+    const reviewId = `rev-${Date.now()}`;
+    const newReview: ServiceReview = {
+      ...reviewData,
+      id: reviewId,
+      bookingId,
+      createdAt: new Date().toISOString().split('T')[0],
+      technicianReply:
+        language === 'ar'
+          ? 'سعدنا بخدمتك وإنجاز الصيانة بأعلى جودة واحترافية! شكراً لثقتك الدائمة بمُتقَن.'
+          : 'Thank you for choosing Mutqin! We were proud to deliver this service to the highest standards.',
+    };
+
+    setBookings((prev) =>
+      prev.map((b) => (b.id === bookingId ? { ...b, review: newReview } : b))
+    );
+
+    // Award +25 Mutqin points bonus for leaving a review!
+    const bonusPoints = 25;
+    setLoyaltyProfile((prev) => {
+      const updatedBalance = prev.pointsBalance + bonusPoints;
+      const updatedLifetime = prev.lifetimeEarned + bonusPoints;
+      const tierInfo = calculateTier(updatedLifetime);
+      return {
+        ...prev,
+        pointsBalance: updatedBalance,
+        lifetimeEarned: updatedLifetime,
+        ...tierInfo,
+      };
+    });
+
+    const loyaltyTx: LoyaltyTransaction = {
+      id: `tx-${Date.now()}-rev`,
+      type: 'earned',
+      points: bonusPoints,
+      sarEquivalent: Math.round((bonusPoints / 10) * 100) / 100,
+      date: new Date().toISOString().split('T')[0],
+      descriptionAr: `مكافأة تقييم خدمة #${bookingId} وكتابة مراجعة الفني ⭐`,
+      descriptionEn: `Review bonus for service #${bookingId} feedback ⭐`,
+      bookingId,
+    };
+    setLoyaltyHistory((prev) => [loyaltyTx, ...prev]);
+
+    // Send notification
+    const targetBooking = bookings.find((b) => b.id === bookingId);
+    const techName = targetBooking?.technicianName || 'الفني';
+    const notif: MarketplaceNotification = {
+      id: `notif-${Date.now()}-rev`,
+      recipientRole: 'all',
+      type: 'status_update',
+      titleAr: 'تم تسجيل تقييمك للخدمة بنجاح ⭐',
+      titleEn: 'Service Review Submitted Successfully ⭐',
+      messageAr: `شكراً لتقييمك (${newReview.rating}/5 نجوم) للمهندس ${techName}. كسبت +${bonusPoints} نقطة ولاء إضافية في محفظتك!`,
+      messageEn: `Thank you for rating (${newReview.rating}/5 stars) ${techName}. You earned +${bonusPoints} Mutqin bonus points!`,
+      timestamp: 'الآن',
+      isRead: false,
+      bookingId,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    showToast(
+      language === 'ar'
+        ? `شكراً لمشاركتك التقييم! كسبت +${bonusPoints} نقطة ولاء مُتقَن 🌟`
+        : `Thank you for reviewing! +${bonusPoints} Mutqin Points awarded 🌟`
     );
   };
 
@@ -1250,6 +1384,12 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
         createBooking,
         updateBookingStatus,
         rescheduleBooking,
+        submitBookingReview,
+        updateBookingLiveTracking,
+        selectedBookingForLiveTrack,
+        setSelectedBookingForLiveTrack,
+        selectedBookingForReview,
+        setSelectedBookingForReview,
         createQuote,
         submitBid,
         awardBid,

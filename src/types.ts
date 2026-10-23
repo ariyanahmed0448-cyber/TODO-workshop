@@ -24,6 +24,39 @@ export interface MarketplaceService {
   featuresAr: string[];
 }
 
+export interface ServiceReview {
+  id: string;
+  bookingId: string;
+  technicianName: string;
+  rating: number; // 1 to 5
+  punctualityRating: number; // 1 to 5
+  qualityRating: number; // 1 to 5
+  cleanlinessRating: number; // 1 to 5
+  badges: string[];
+  comment: string;
+  createdAt: string;
+  technicianReply?: string;
+}
+
+export interface LiveTrackingTelemetry {
+  technicianLat: number;
+  technicianLng: number;
+  etaMinutes: number;
+  distanceKm: number;
+  currentRoadAr: string;
+  currentRoadEn: string;
+  speedKmh: number;
+  vehicleModelAr: string;
+  vehicleModelEn: string;
+  plateNumberAr: string;
+  plateNumberEn: string;
+  technicianPhone: string;
+  technicianAvatar?: string;
+  routeProgressPercent: number;
+  milestone: 'departed' | 'en_route' | 'approaching' | 'arrived';
+  lastUpdatedTime: string;
+}
+
 export interface Booking {
   id: string;
   customerId: string;
@@ -48,6 +81,9 @@ export interface Booking {
   paymentStatus: 'paid' | 'pending';
   zatcaInvoiceNo: string;
   technicianName?: string;
+  technicianPhone?: string;
+  liveTracking?: LiveTrackingTelemetry;
+  review?: ServiceReview;
   createdAt: string;
 }
 
